@@ -1,0 +1,181 @@
+// app/extensions/theme-extension/blocks/discount-bar.liquid
+{% schema %}
+{
+  "name": "Discount Bar",
+  "target": "section",
+  "settings": [
+    {
+      "type": "color",
+      "id": "background_color",
+      "label": "Background Color",
+      "default": "#FF5733"
+    },
+    {
+      "type": "color",
+      "id": "text_color",
+      "label": "Text Color",
+      "default": "#FFFFFF"
+    },
+    {
+      "type": "text",
+      "id": "emoji",
+      "label": "Emoji",
+      "default": "🔥"
+    },
+    {
+      "type": "range",
+      "id": "timer_duration",
+      "label": "Timer Duration (minutes)",
+      "min": 5,
+      "max": 60,
+      "step": 5,
+      "default": 30
+    },
+    {
+      "type": "range",
+      "id": "discount_percentage",
+      "label": "Discount Percentage",
+      "min": 5,
+      "max": 50,
+      "step": 5,
+      "default": 15
+    },
+    {
+      "type": "text",
+      "id": "bar_text",
+      "label": "Bar Text",
+      "default": "Limited time offer! Use code {code} for {discount}% off your order!"
+    }
+  ],
+}
+{% endschema %}
+
+<div
+  id="discount-bar-app"
+  data-background-color="{{ block.settings.background_color }}"
+  data-text-color="{{ block.settings.text_color }}"
+  data-emoji="{{ block.settings.emoji }}"
+  data-timer-duration="{{ block.settings.timer_duration }}"
+  data-discount-percentage="{{ block.settings.discount_percentage }}"
+  data-bar-text="{{ block.settings.bar_text }}"
+>
+  <div class="discount-bar-container">
+    <span class="discount-bar-emoji"></span>
+    <span class="discount-bar-text"></span>
+    <span class="discount-bar-timer"></span>
+  </div>
+</div>
+
+<style>
+  #discount-bar-app {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    position: relative;
+    z-index: 100;
+  }
+
+  .discount-bar-container {
+    width: 100%;
+    max-width: 400px;
+    height: 75px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 16px;
+    margin: 10px auto;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+
+  .discount-bar-emoji {
+    font-size: 24px;
+    margin-right: 12px;
+  }
+
+  .discount-bar-timer {
+    margin-left: 12px;
+    display: flex;
+    align-items: center;
+    background: rgba(0,0,0,0.1);
+    padding: 4px 8px;
+    border-radius: 4px;
+  }
+</style>
+
+<script>
+  (function() {
+    // Get the discount bar element
+    const discountBar = document.getElementById('discount-bar-app');
+    if (!discountBar) return;
+
+    // Get settings from data attributes
+    const settings = {
+      backgroundColor: discountBar.dataset.backgroundColor || '#FF5733',
+      textColor: discountBar.dataset.textColor || '#FFFFFF',
+      emoji: discountBar.dataset.emoji || '🔥',
+      timerDuration: parseInt(discountBar.dataset.timerDuration || '30', 10),
+      discountPercentage: parseInt(discountBar.dataset.discountPercentage || '15', 10),
+      barText: discountBar.dataset.barText || 'Limited time offer! Use code {code} for {discount}% off your order!'
+    };
+
+    // Elements
+    const container = discountBar.querySelector('.discount-bar-container');
+    const emojiElement = discountBar.querySelector('.discount-bar-emoji');
+    const textElement = discountBar.querySelector('.discount-bar-text');
+    const timerElement = discountBar.querySelector('.discount-bar-timer');
+
+    // Apply styles
+    container.style.backgroundColor = settings.backgroundColor;
+    container.style.color = settings.textColor;
+    emojiElement.textContent = settings.emoji;
+
+    // Generate random discount code
+    function generateDiscountCode() {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let code = '';
+      for (let i = 0; i < 8; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return code;
+    }
+
+    const discountCode = generateDiscountCode();
+
+    // Format bar text
+    textElement.textContent = settings.barText
+      .replace('{code}', discountCode)
+      .replace('{discount}', settings.discountPercentage);
+
+    // Set up countdown timer
+    let timeLeft = settings.timerDuration * 60; // Convert to seconds
+
+    function formatTime(timeInSeconds) {
+      const minutes = Math.floor(timeInSeconds / 60);
+      const seconds = timeInSeconds % 60;
+      return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    timerElement.textContent = formatTime(timeLeft);
+
+    const timer = setInterval(() => {
+      timeLeft -= 1;
+
+      if (timeLeft <= 0) {
+        clearInterval(timer);
+        timeLeft = 0;
+      }
+
+      timerElement.textContent = formatTime(timeLeft);
+    }, 1000);
+
+    // Handle click to apply discount
+    container.addEventListener('click', () => {
+      // Redirect to cart with discount code applied
+      window.location.href = `/cart?discount=${discountCode}`;
+    });
+  })();
+</script>
+
+
