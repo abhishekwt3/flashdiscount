@@ -3,7 +3,7 @@
 client_id = "0fc6ba34a6e6ea3e0df48a758dfa5437"
 name = "flashOff"
 handle = "flashoff"
-application_url = "https://interpretation-moisture-researchers-tickets.trycloudflare.com"
+application_url = "https://pasta-bite-whether-americas.trycloudflare.com"
 embedded = true
 
 [build]
@@ -24,13 +24,13 @@ api_version = "2025-04"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products"
+scopes = "write_products, write_discounts"
 
 [auth]
 redirect_urls = [
-  "https://interpretation-moisture-researchers-tickets.trycloudflare.com/auth/callback",
-  "https://interpretation-moisture-researchers-tickets.trycloudflare.com/auth/shopify/callback",
-  "https://interpretation-moisture-researchers-tickets.trycloudflare.com/api/auth/callback"
+  "https://pasta-bite-whether-americas.trycloudflare.com/auth/callback",
+  "https://pasta-bite-whether-americas.trycloudflare.com/auth/shopify/callback",
+  "https://pasta-bite-whether-americas.trycloudflare.com/api/auth/callback"
 ]
 
 [pos]

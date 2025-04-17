@@ -1,24 +1,26 @@
- // app/components/DiscountBarPreview.jsx
+// app/components/DiscountBarPreview.jsx
 import { useState, useEffect } from "react";
 import { Box, Text } from "@shopify/polaris";
 
 export default function DiscountBarPreview({ settings }) {
-  const [timeLeft, setTimeLeft] = useState(settings.timerDuration * 60); // Convert to seconds
-  const [discountCode, setDiscountCode] = useState("SAVE15NOW");
+  // Default values in case settings are incomplete
+  const safeSettings = {
+    backgroundColor: "#FF5733",
+    textColor: "#FFFFFF",
+    emoji: "🔥",
+    timerDuration: 15,
+    discountPercentage: 15,
+    barText: "Limited time offer! {discount}% off your entire order automatically applied!",
+    ...settings
+  };
+
+  const [timeLeft, setTimeLeft] = useState((safeSettings.timerDuration || 15) * 60); // Convert to seconds
 
   useEffect(() => {
-    // Generate a random discount code
-    const generateCode = () => {
-      const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-      let code = "";
-      for (let i = 0; i < 8; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      return code;
-    };
-
-    setDiscountCode(generateCode());
-  }, []);
+    // Reset timer when duration changes, with safety check
+    const duration = safeSettings.timerDuration || 15;
+    setTimeLeft(duration * 60);
+  }, [safeSettings.timerDuration]);
 
   useEffect(() => {
     // Set up timer
@@ -42,18 +44,20 @@ export default function DiscountBarPreview({ settings }) {
     return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
   };
 
-  // Replace placeholders in the bar text
+  // Get display text for the bar
   const getBarText = () => {
-    return settings.barText
-      .replace("{code}", discountCode)
-      .replace("{discount}", settings.discountPercentage);
+    // Replace placeholders in the text
+    const text = safeSettings.barText || "Limited time offer! {discount}% off your entire order automatically applied!";
+    const percentage = safeSettings.discountPercentage || 15;
+
+    return text.replace("{discount}", percentage);
   };
 
   return (
     <Box
       style={{
-        backgroundColor: settings.backgroundColor,
-        color: settings.textColor,
+        backgroundColor: safeSettings.backgroundColor,
+        color: safeSettings.textColor,
         width: "350px",
         height: "75px",
         borderRadius: "6px",
@@ -79,7 +83,7 @@ export default function DiscountBarPreview({ settings }) {
             marginRight: "12px",
           }}
         >
-          {settings.emoji}
+          {safeSettings.emoji}
         </span>
         <Text variant="bodyMd" as="span">
           {getBarText()}
@@ -98,6 +102,22 @@ export default function DiscountBarPreview({ settings }) {
             {formatTime(timeLeft)}
           </Text>
         </Box>
+      </div>
+      {/* Badge showing automatic application */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: "-10px",
+          right: "10px",
+          background: "#00a881",
+          color: "white",
+          fontSize: "10px",
+          padding: "2px 6px",
+          borderRadius: "10px",
+          fontWeight: "bold",
+        }}
+      >
+        AUTO-APPLIED
       </div>
     </Box>
   );

@@ -80,3 +80,75 @@ export async function createDiscount(session, { code, percentage }) {
     throw error;
   }
 }
+
+/**
+ * Create an automatic discount in Shopify Admin API that applies automatically
+ * and expires after a specified duration
+ */
+export async function createAutomaticDiscount(session, { percentage, durationMinutes = 15 }) {
+  try {
+    // Calculate expiry time (current time + duration in minutes)
+    const now = new Date();
+    const endsAt = new Date(now.getTime() + durationMinutes * 60000);
+
+    const CREATE_AUTOMATIC_DISCOUNT_MUTATION = `
+      mutation discountAutomaticAppCreate($automaticAppDiscount: DiscountAutomaticAppInput!) {
+        discountAutomaticAppCreate(automaticAppDiscount: $automaticAppDiscount) {
+          automaticAppDiscount {
+            discountId
+            title
+            status
+            startsAt
+            endsAt
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+
+    const response = await session.admin.graphql(CREATE_AUTOMATIC_DISCOUNT_MUTATION, {
+      variables: {
+        automaticAppDiscount: {
+          title: `Limited Time Offer - ${percentage}% Off Everything`,
+          startsAt: now.toISOString(),
+          endsAt: endsAt.toISOString(),
+          status: "ACTIVE",
+          customerGets: {
+            value: {
+              percentageValue: parseFloat(percentage),
+            },
+            items: {
+              all: true
+            }
+          },
+          customerSelection: {
+            all: true
+          }
+        },
+      },
+    });
+
+    const responseJson = await response.json();
+
+    if (responseJson.errors) {
+      throw new Error(responseJson.errors[0].message);
+    }
+
+    const { userErrors } = responseJson.data.discountAutomaticAppCreate;
+    if (userErrors.length > 0) {
+      throw new Error(userErrors[0].message);
+    }
+
+    return responseJson.data.discountAutomaticAppCreate.automaticAppDiscount;
+  } catch (error) {
+    if (error instanceof GraphqlQueryError) {
+      throw new Error(
+        `${error.message}\n${JSON.stringify(error.response, null, 2)}`
+      );
+    }
+    throw error;
+  }
+}
