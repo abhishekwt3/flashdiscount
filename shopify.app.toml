@@ -3,7 +3,7 @@
 client_id = "0fc6ba34a6e6ea3e0df48a758dfa5437"
 name = "flashOff"
 handle = "flashoff"
-application_url = "https://pasta-bite-whether-americas.trycloudflare.com"
+application_url = "https://have-lan-blond-running.trycloudflare.com"
 embedded = true
 
 [build]
@@ -28,9 +28,9 @@ scopes = "write_products, write_discounts"
 
 [auth]
 redirect_urls = [
-  "https://pasta-bite-whether-americas.trycloudflare.com/auth/callback",
-  "https://pasta-bite-whether-americas.trycloudflare.com/auth/shopify/callback",
-  "https://pasta-bite-whether-americas.trycloudflare.com/api/auth/callback"
+  "https://have-lan-blond-running.trycloudflare.com/auth/callback",
+  "https://have-lan-blond-running.trycloudflare.com/auth/shopify/callback",
+  "https://have-lan-blond-running.trycloudflare.com/api/auth/callback"
 ]
 
 [pos]

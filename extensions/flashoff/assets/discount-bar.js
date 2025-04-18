@@ -1,124 +1,4 @@
-{% schema %}
-{
-  "name": "Discount Bar",
-  "target": "section",
-  "settings": [
-    {
-      "type": "color",
-      "id": "background_color",
-      "label": "Background Color",
-      "default": "#FF5733"
-    },
-    {
-      "type": "color",
-      "id": "text_color",
-      "label": "Text Color",
-      "default": "#FFFFFF"
-    },
-    {
-      "type": "text",
-      "id": "emoji",
-      "label": "Emoji",
-      "default": "🔥"
-    },
-    {
-      "type": "range",
-      "id": "timer_duration",
-      "label": "Timer Duration (minutes)",
-      "min": 5,
-      "max": 60,
-      "step": 5,
-      "default": 15
-    },
-    {
-      "type": "range",
-      "id": "discount_percentage",
-      "label": "Discount Percentage",
-      "min": 5,
-      "max": 50,
-      "step": 5,
-      "default": 15
-    },
-    {
-      "type": "text",
-      "id": "bar_text",
-      "label": "Bar Text",
-      "default": "Limited time offer! {discount}% off your entire order automatically applied!"
-    }
-  ]
-}
-{% endschema %}
-
-<div
-  id="discount-bar-app"
-  data-background-color="{{ block.settings.background_color }}"
-  data-text-color="{{ block.settings.text_color }}"
-  data-emoji="{{ block.settings.emoji }}"
-  data-timer-duration="{{ block.settings.timer_duration }}"
-  data-discount-percentage="{{ block.settings.discount_percentage }}"
-  data-bar-text="{{ block.settings.bar_text }}"
->
-  <div class="discount-bar-container">
-    <span class="discount-bar-emoji"></span>
-    <span class="discount-bar-text"></span>
-    <span class="discount-bar-timer"></span>
-  </div>
-</div>
-
-<style>
-  #discount-bar-app {
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    position: relative;
-    z-index: 100;
-  }
-
-  .discount-bar-container {
-    width: 100%;
-    max-width: 400px;
-    height: 75px;
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 16px;
-    margin: 10px auto;
-    cursor: pointer;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  }
-
-  .discount-bar-emoji {
-    font-size: 24px;
-    margin-right: 12px;
-  }
-
-  .discount-bar-timer {
-    margin-left: 12px;
-    display: flex;
-    align-items: center;
-    background: rgba(0,0,0,0.1);
-    padding: 4px 8px;
-    border-radius: 4px;
-  }
-
-  /* Add a small badge to indicate automatic discount */
-  .discount-bar-container::after {
-    content: "AUTO-APPLIED";
-    position: absolute;
-    bottom: -8px;
-    right: 10px;
-    background: #00a881;
-    color: white;
-    font-size: 10px;
-    padding: 2px 6px;
-    border-radius: 10px;
-    font-weight: bold;
-  }
-</style>
-
-<script>
-// Discount Bar Script - Simplified Approach
+// Discount Bar Script
 (function() {
   // Constants
   const DISCOUNT_ENDPOINT = '/api/generate-code';
@@ -163,25 +43,70 @@
     timeLeft = Math.max(0, DEFAULT_DURATION_MINUTES * 60 - elapsedSeconds);
 
     // Update the display
-    updateDiscountDisplay();
+    updateDiscountDisplay(discountCode);
     startTimer(timeLeft);
   } else {
-    // For now, just display a mock timer with the discount percentage
-    // We'll implement the actual API call later
-    updateDiscountDisplay();
-    startTimer(DEFAULT_DURATION_MINUTES * 60);
+    // Generate a new discount
+    generateNewDiscount();
   }
 
   // Handle click to apply discount
   container.addEventListener('click', () => {
-    // Redirect to cart - in the simplified approach, this is just visual
+    // Simply redirect to cart - the discount is automatic
     window.location.href = '/cart';
   });
 
   /**
+   * Generates a new discount via the API
+   */
+  function generateNewDiscount() {
+    fetch(DISCOUNT_ENDPOINT)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`API Error: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        if (data.success) {
+          // Store the new discount data
+          const discountData = {
+            code: data.code,
+            percentage: settings.discountPercentage,
+            createdAt: Date.now(),
+            expiresAt: Date.now() + (DEFAULT_DURATION_MINUTES * 60 * 1000)
+          };
+
+          saveDiscount(discountData);
+
+          // Update UI
+          discountCode = data.code;
+          timeLeft = DEFAULT_DURATION_MINUTES * 60;
+          updateDiscountDisplay(discountCode);
+          startTimer(timeLeft);
+        } else {
+          console.error('Error generating discount:', data.error);
+          // Use a placeholder code
+          discountCode = 'SHOPNOW';
+          timeLeft = DEFAULT_DURATION_MINUTES * 60;
+          updateDiscountDisplay(discountCode);
+          startTimer(timeLeft);
+        }
+      })
+      .catch(error => {
+        console.error('Error fetching discount:', error);
+        // Use a placeholder in case of error
+        discountCode = 'SHOPNOW';
+        timeLeft = DEFAULT_DURATION_MINUTES * 60;
+        updateDiscountDisplay(discountCode);
+        startTimer(timeLeft);
+      });
+  }
+
+  /**
    * Updates the display with discount information
    */
-  function updateDiscountDisplay() {
+  function updateDiscountDisplay(code) {
     // Format bar text
     textElement.textContent = settings.barText
       .replace('{discount}', settings.discountPercentage);
@@ -207,8 +132,8 @@
         clearInterval(timer);
         seconds = 0;
 
-        // Reset the timer
-        startTimer(DEFAULT_DURATION_MINUTES * 60);
+        // Generate a new discount when the timer expires
+        generateNewDiscount();
       }
 
       timerElement.textContent = formatTime(seconds);
@@ -249,5 +174,3 @@
     return discountData.expiresAt > now;
   }
 })();
-</script>
-

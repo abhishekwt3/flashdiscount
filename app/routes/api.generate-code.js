@@ -1,47 +1,93 @@
 import { json } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import { createAutomaticDiscount, generateDiscountCode } from "../models/DiscountCode.server";
-import { prisma } from "../db.server";
+import { PrismaClient } from '@prisma/client';
+
+// Initialize Prisma client
+const prisma = new PrismaClient();
 
 /**
  * API endpoint to create an automatic discount
  * This will be called by the theme app extension
  */
 export async function loader({ request }) {
+  console.log("API: Generate code endpoint called");
+  console.log("Request URL:", request.url);
+
   try {
-    const { admin, session } = await authenticate.public.appProxy(request);
+    // First, try to authenticate the request
+    console.log("Authenticating request...");
+    let authResult;
+
+    try {
+      // Try admin authentication
+      authResult = await authenticate.admin(request);
+      console.log("Admin authentication successful");
+    } catch (adminAuthError) {
+      console.log("Admin auth failed, trying public authentication:", adminAuthError.message);
+      try {
+        // Try public authentication as fallback
+        authResult = await authenticate.public.appProxy(request);
+        console.log("Public app proxy authentication successful");
+      } catch (publicAuthError) {
+        console.error("All authentication methods failed:", publicAuthError.message);
+        throw new Error("Authentication failed: " + publicAuthError.message);
+      }
+    }
+
+    if (!authResult) {
+      console.error("Authentication result is empty");
+      throw new Error("Invalid authentication result");
+    }
+
+    // Extract admin and session from auth result
+    const { admin, session } = authResult;
+
+    if (!admin) {
+      console.error("Admin object is missing from authentication result");
+      throw new Error("Missing admin API access");
+    }
+
+    if (!session) {
+      console.error("Session object is missing from authentication result");
+      throw new Error("Missing session");
+    }
+
     const shop = session.shop;
+    console.log("Authentication successful for shop:", shop);
 
     // Get the settings for this shop
+    console.log("Fetching settings for shop:", shop);
     const settings = await prisma.discountBarSettings.findFirst({
       where: { shopId: shop, isActive: true }
     });
+
+    console.log("Settings found:", settings ? "Yes" : "No");
 
     // If no active settings are found, use default values
     const percentage = settings?.discountPercentage || 15;
     const durationMinutes = 15; // Fixed 15 minutes duration
 
-    // Create the automatic discount in Shopify
+    // Generate a display code for UI
+    const displayCode = generateDiscountCode();
+    console.log("Generated display code:", displayCode);
+
+    // Try to create the automatic discount in Shopify
+    console.log(`Attempting to create ${percentage}% discount for ${durationMinutes} minutes`);
+
     let discount;
     let discountError = null;
 
     try {
-      discount = await createAutomaticDiscount(session, {
+      // Pass the admin object directly (not the session)
+      discount = await createAutomaticDiscount(admin, {
         percentage,
         durationMinutes
       });
-    } catch (error) {
-      console.error("Error creating automatic discount:", error);
-      discountError = error.message;
-      // Continue execution - we'll create a "display-only" discount code below
-    }
 
-    // For display purposes, we still generate a "phantom code"
-    // This is just to show in the UI but doesn't need to be entered
-    const displayCode = generateDiscountCode();
+      console.log("Discount created successfully:", discount);
 
-    // Only try to store in database if we have a successful discount creation
-    if (discount && !discountError) {
+      // Save successful discount to database
       try {
         await prisma.discountCode.create({
           data: {
@@ -49,25 +95,49 @@ export async function loader({ request }) {
             code: displayCode,
             discountPercentage: percentage,
             isAutomatic: true,
-            discountId: discount.discountId,
+            discountId: discount.id,
             expiresAt: new Date(Date.now() + durationMinutes * 60000)
           }
         });
+        console.log("Discount saved to database");
       } catch (dbError) {
-        console.error("Error saving discount code to database:", dbError);
-        // Continue execution - the discount is still created in Shopify
+        console.error("Error saving discount to database:", dbError);
+        // Continue even if DB save fails
+      }
+
+    } catch (discountCreationError) {
+      console.error("Error creating discount:", discountCreationError);
+      discountError = discountCreationError.message;
+
+      // Save the failed attempt to database for tracking
+      try {
+        await prisma.discountCode.create({
+          data: {
+            shopId: shop,
+            code: displayCode,
+            discountPercentage: percentage,
+            isAutomatic: false,
+            expiresAt: new Date(Date.now() + durationMinutes * 60000)
+          }
+        });
+        console.log("Failed discount attempt saved to database");
+      } catch (dbError) {
+        console.error("Error saving failed discount to database:", dbError);
       }
     }
 
     return json({
-      success: discount && !discountError,
-      code: displayCode, // For UI display purposes
+      success: !!discount,
+      code: displayCode,
       isAutomatic: true,
+      percentage: percentage,
       discount: discount || null,
       error: discountError
     });
+
   } catch (error) {
-    console.error("Error in discount generation process:", error);
+    console.error("Error in generate-code endpoint:", error);
+    console.error("Error stack:", error.stack);
 
     // Generate a code anyway for display purposes
     const displayCode = generateDiscountCode();
@@ -76,7 +146,8 @@ export async function loader({ request }) {
       success: false,
       code: displayCode,
       isAutomatic: false,
-      error: "Could not create automatic discount: " + error.message
+      error: `Error: ${error.message || "Unknown error"}`,
+      stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined
     });
   }
 }

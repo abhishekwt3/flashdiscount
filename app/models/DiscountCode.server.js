@@ -1,4 +1,4 @@
-import { GraphqlQueryError } from "@shopify/shopify-api";
+// app/models/DiscountCode.server.js
 
 /**
  * Generate a random discount code
@@ -13,142 +13,133 @@ export function generateDiscountCode() {
 }
 
 /**
- * Create a discount in Shopify Admin API
+ * Create an automatic discount in Shopify Admin API
+ * Using the correct GraphQL mutation structure from Shopify docs
  */
-export async function createDiscount(session, { code, percentage }) {
+export async function createAutomaticDiscount(admin, { percentage, durationMinutes = 15 }) {
   try {
-    const CREATE_DISCOUNT_MUTATION = `
-      mutation discountCodeBasicCreate($basicCodeDiscount: DiscountCodeBasicInput!) {
-        discountCodeBasicCreate(basicCodeDiscount: $basicCodeDiscount) {
-          codeDiscountNode {
-            id
-            codeDiscount {
-              ... on DiscountCodeBasic {
-                title
-                summary
-                status
+    console.log(`Creating automatic discount with ${percentage}% off for ${durationMinutes} minutes`);
+
+    // Calculate start and end times
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + durationMinutes * 60000);
+
+    console.log(`Discount period: ${now.toISOString()} to ${expiresAt.toISOString()}`);
+
+    // Prepare title with timestamp to avoid duplicate title errors
+    const title = `Limited Time Offer - ${percentage}% Off Everything (${now.getTime()})`;
+
+    // Convert percentage to decimal (e.g., 10% becomes 0.1)
+    const decimalPercentage = parseFloat(percentage) / 100;
+    console.log(`Converting ${percentage}% to decimal: ${decimalPercentage}`);
+
+    // The correct mutation based on the latest Shopify API documentation
+    const CREATE_AUTOMATIC_DISCOUNT_MUTATION = `#graphql
+    mutation discountAutomaticBasicCreate($automaticBasicDiscount: DiscountAutomaticBasicInput!) {
+      discountAutomaticBasicCreate(automaticBasicDiscount: $automaticBasicDiscount) {
+        automaticDiscountNode {
+          id
+          automaticDiscount {
+            ... on DiscountAutomaticBasic {
+              title
+              startsAt
+              endsAt
+              combinesWith {
+                productDiscounts
+                shippingDiscounts
+                orderDiscounts
+              }
+              minimumRequirement {
+                ... on DiscountMinimumSubtotal {
+                  greaterThanOrEqualToSubtotal {
+                    amount
+                    currencyCode
+                  }
+                }
+              }
+              customerGets {
+                value {
+                  ... on DiscountPercentage {
+                    percentage
+                  }
+                }
+                items {
+                  ... on AllDiscountItems {
+                    allItems
+                  }
+                }
               }
             }
           }
-          userErrors {
-            field
-            message
-          }
+        }
+        userErrors {
+          field
+          code
+          message
         }
       }
-    `;
+    }`;
 
-    const response = await session.admin.graphql(CREATE_DISCOUNT_MUTATION, {
-      variables: {
-        basicCodeDiscount: {
-          title: `Auto-generated discount: ${code}`,
-          code,
-          startsAt: new Date().toISOString(),
-          customerSelection: {
-            all: true,
-          },
-          customerGets: {
-            value: {
-              percentageValue: parseFloat(percentage),
+    console.log("Sending GraphQL mutation to create automatic discount");
+
+    // Make sure we're passing the admin object directly
+    const response = await admin.graphql(
+      CREATE_AUTOMATIC_DISCOUNT_MUTATION,
+      {
+        variables: {
+          automaticBasicDiscount: {
+            title: title,
+            startsAt: now.toISOString(),
+            endsAt: expiresAt.toISOString(),
+            minimumRequirement: {
+              subtotal: {
+                greaterThanOrEqualToSubtotal: "0.01"
+              }
             },
-            items: {
-              all: true,
+            customerGets: {
+              value: {
+                percentage: decimalPercentage // Use the decimal value (0.1 for 10%)
+              },
+              items: {
+                all: true
+              }
             },
-          },
-        },
-      },
-    });
-
-    const responseJson = await response.json();
-
-    if (responseJson.errors) {
-      throw new Error(responseJson.errors[0].message);
-    }
-
-    const { userErrors } = responseJson.data.discountCodeBasicCreate;
-    if (userErrors.length > 0) {
-      throw new Error(userErrors[0].message);
-    }
-
-    return responseJson.data.discountCodeBasicCreate.codeDiscountNode;
-  } catch (error) {
-    if (error instanceof GraphqlQueryError) {
-      throw new Error(
-        `${error.message}\n${JSON.stringify(error.response, null, 2)}`
-      );
-    }
-    throw error;
-  }
-}
-
-/**
- * Create an automatic discount in Shopify Admin API that applies automatically
- * and expires after a specified duration
- */
-export async function createAutomaticDiscount(session, { percentage, durationMinutes = 15 }) {
-  try {
-    // Calculate expiry time (current time + duration in minutes)
-    const now = new Date();
-    const endsAt = new Date(now.getTime() + durationMinutes * 60000);
-
-    const CREATE_AUTOMATIC_DISCOUNT_MUTATION = `
-      mutation discountAutomaticAppCreate($automaticAppDiscount: DiscountAutomaticAppInput!) {
-        discountAutomaticAppCreate(automaticAppDiscount: $automaticAppDiscount) {
-          automaticAppDiscount {
-            discountId
-            title
-            status
-            startsAt
-            endsAt
-          }
-          userErrors {
-            field
-            message
-          }
-        }
-      }
-    `;
-
-    const response = await session.admin.graphql(CREATE_AUTOMATIC_DISCOUNT_MUTATION, {
-      variables: {
-        automaticAppDiscount: {
-          title: `Limited Time Offer - ${percentage}% Off Everything`,
-          startsAt: now.toISOString(),
-          endsAt: endsAt.toISOString(),
-          status: "ACTIVE",
-          customerGets: {
-            value: {
-              percentageValue: parseFloat(percentage),
-            },
-            items: {
-              all: true
+            combinesWith: {
+              productDiscounts: false,
+              shippingDiscounts: true,
+              orderDiscounts: false
             }
-          },
-          customerSelection: {
-            all: true
           }
-        },
-      },
-    });
+        }
+      }
+    );
 
     const responseJson = await response.json();
+    console.log("Automatic discount creation response:", JSON.stringify(responseJson, null, 2));
 
     if (responseJson.errors) {
       throw new Error(responseJson.errors[0].message);
     }
 
-    const { userErrors } = responseJson.data.discountAutomaticAppCreate;
-    if (userErrors.length > 0) {
+    if (!responseJson.data) {
+      throw new Error("Invalid response format: missing data object");
+    }
+
+    const discountResult = responseJson.data.discountAutomaticBasicCreate;
+
+    if (!discountResult) {
+      throw new Error("Invalid response format: missing discountAutomaticBasicCreate");
+    }
+
+    const { userErrors } = discountResult;
+    if (userErrors && userErrors.length > 0) {
       throw new Error(userErrors[0].message);
     }
 
-    return responseJson.data.discountAutomaticAppCreate.automaticAppDiscount;
+    return discountResult.automaticDiscountNode;
   } catch (error) {
-    if (error instanceof GraphqlQueryError) {
-      throw new Error(
-        `${error.message}\n${JSON.stringify(error.response, null, 2)}`
-      );
-    }
-    throw error;
+    console.error("Error creating automatic discount:", error);
+    console.error("Error stack:", error.stack);
+    throw new Error(`Failed to create automatic discount: ${error.message || "Unknown error"}`);
   }
 }
