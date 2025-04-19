@@ -3,7 +3,7 @@
 client_id = "0fc6ba34a6e6ea3e0df48a758dfa5437"
 name = "flashOff"
 handle = "flashoff"
-application_url = "https://have-lan-blond-running.trycloudflare.com"
+application_url = "https://athletes-screenshot-statement-flexibility.trycloudflare.com"
 embedded = true
 
 [build]
@@ -24,13 +24,13 @@ api_version = "2025-04"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products, write_discounts"
+scopes = "write_products, write_discounts, write_metaobjects"
 
 [auth]
 redirect_urls = [
-  "https://have-lan-blond-running.trycloudflare.com/auth/callback",
-  "https://have-lan-blond-running.trycloudflare.com/auth/shopify/callback",
-  "https://have-lan-blond-running.trycloudflare.com/api/auth/callback"
+  "https://athletes-screenshot-statement-flexibility.trycloudflare.com/auth/callback",
+  "https://athletes-screenshot-statement-flexibility.trycloudflare.com/auth/shopify/callback",
+  "https://athletes-screenshot-statement-flexibility.trycloudflare.com/api/auth/callback"
 ]
 
 [pos]

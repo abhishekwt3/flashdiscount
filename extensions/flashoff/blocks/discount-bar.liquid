@@ -1,64 +1,45 @@
 {% schema %}
 {
-  "name": "Discount Bar",
+  "name": "Discount Popup",
   "target": "section",
-  "settings": [
-    {
-      "type": "color",
-      "id": "background_color",
-      "label": "Background Color",
-      "default": "#FF5733"
-    },
-    {
-      "type": "color",
-      "id": "text_color",
-      "label": "Text Color",
-      "default": "#FFFFFF"
-    },
-    {
-      "type": "text",
-      "id": "emoji",
-      "label": "Emoji",
-      "default": "🔥"
-    },
-    {
-      "type": "range",
-      "id": "timer_duration",
-      "label": "Timer Duration (minutes)",
-      "min": 5,
-      "max": 60,
-      "step": 5,
-      "default": 15
-    },
-    {
-      "type": "range",
-      "id": "discount_percentage",
-      "label": "Discount Percentage",
-      "min": 5,
-      "max": 50,
-      "step": 5,
-      "default": 15
-    },
-    {
-      "type": "text",
-      "id": "bar_text",
-      "label": "Bar Text",
-      "default": "Limited time offer! {discount}% off your entire order automatically applied!"
-    }
-  ]
+  "settings": []
 }
 {% endschema %}
 
+{% comment %}
+  This block reads settings directly from shop metafields using string splitting
+  instead of parse_json, for compatibility with older Shopify versions
+{% endcomment %}
+
+{% assign settings_data = shop.metafields.flashoff.settings | default: '{}' %}
+
+{% comment %} Extract individual settings using split method {% endcomment %}
+{% assign background_color = settings_data | split: '"backgroundColor":"' | last | split: '"' | first | default: "#FF5733" %}
+{% assign text_color = settings_data | split: '"textColor":"' | last | split: '"' | first | default: "#FFFFFF" %}
+{% assign emoji = settings_data | split: '"emoji":"' | last | split: '"' | first | default: "🔥" %}
+{% assign timer_duration = settings_data | split: '"timerDuration":' | last | split: ',' | first | default: "15" %}
+{% assign timer_duration_number = timer_duration | times: 1 | default: 15 %}
+{% assign discount_percentage = settings_data | split: '"discountPercentage":' | last | split: ',' | first | default: "15" %}
+{% assign discount_percentage_number = discount_percentage | times: 1 | default: 15 %}
+{% assign bar_text = settings_data | split: '"barText":"' | last | split: '"' | first | default: "Don't leave your items behind! Get {discount}% off if you complete your purchase now!" %}
+{% assign session_threshold = settings_data | split: '"sessionThreshold":' | last | split: ',' | first | default: "60" %}
+{% assign session_threshold_number = session_threshold | times: 1 | default: 60 %}
+{% assign require_cart_items = settings_data | split: '"requireCartItems":' | last | split: ',' | first | default: "true" %}
+{% assign is_active = settings_data | split: '"isActive":' | last | split: ',' | first | default: "true" %}
+
 <div
   id="discount-bar-app"
-  data-background-color="{{ block.settings.background_color }}"
-  data-text-color="{{ block.settings.text_color }}"
-  data-emoji="{{ block.settings.emoji }}"
-  data-timer-duration="{{ block.settings.timer_duration }}"
-  data-discount-percentage="{{ block.settings.discount_percentage }}"
-  data-bar-text="{{ block.settings.bar_text }}"
+  data-background-color="{{ background_color }}"
+  data-text-color="{{ text_color }}"
+  data-emoji="{{ emoji }}"
+  data-timer-duration="{{ timer_duration_number }}"
+  data-discount-percentage="{{ discount_percentage_number }}"
+  data-bar-text="{{ bar_text }}"
+  data-session-threshold="{{ session_threshold_number }}"
+  data-require-cart-items="{{ require_cart_items }}"
 >
   <div class="discount-bar-container">
+    <span class="discount-bar-close">&times;</span>
     <span class="discount-bar-emoji"></span>
     <span class="discount-bar-text"></span>
     <span class="discount-bar-timer"></span>
@@ -67,25 +48,40 @@
 
 <style>
   #discount-bar-app {
+    position: fixed;
+    bottom: 20px;
+    left: 0;
+    right: 0;
     width: 100%;
-    display: flex;
+    display: none; /* Initially hide, JS will show */
     justify-content: center;
-    position: relative;
-    z-index: 100;
+    align-items: center;
+    z-index: 9999;
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.3s ease, transform 0.3s ease;
   }
 
   .discount-bar-container {
-    width: 100%;
+    width: 90%;
     max-width: 400px;
-    height: 75px;
+    min-height: 75px;
     border-radius: 6px;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0 16px;
-    margin: 10px auto;
+    padding: 16px;
+    margin: 0 auto;
     cursor: pointer;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    position: relative;
+    text-align: center;
+  }
+
+  .discount-bar-container:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.25);
   }
 
   .discount-bar-emoji {
@@ -100,13 +96,29 @@
     background: rgba(0,0,0,0.1);
     padding: 4px 8px;
     border-radius: 4px;
+    font-weight: bold;
   }
 
-  /* Add a small badge to indicate automatic discount */
-  .discount-bar-container::after {
-    content: "AUTO-APPLIED";
+  .discount-bar-close {
     position: absolute;
-    bottom: -8px;
+    top: 5px;
+    right: 10px;
+    font-size: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+  }
+
+  .discount-bar-close:hover {
+    opacity: 1;
+  }
+
+  /* Add a small badge to indicate clickable */
+  .discount-bar-container::after {
+    content: "CLICK TO SAVE";
+    position: absolute;
+    bottom: -10px;
     right: 10px;
     background: #00a881;
     color: white;
@@ -115,139 +127,26 @@
     border-radius: 10px;
     font-weight: bold;
   }
-</style>
 
-<script>
-// Discount Bar Script - Simplified Approach
-(function() {
-  // Constants
-  const DISCOUNT_ENDPOINT = '/api/generate-code';
-  const STORAGE_KEY = 'flashoff_discount_data';
-  const DEFAULT_DURATION_MINUTES = 15;
-
-  // Get the discount bar element
-  const discountBar = document.getElementById('discount-bar-app');
-  if (!discountBar) return;
-
-  // DOM elements
-  const container = discountBar.querySelector('.discount-bar-container');
-  const emojiElement = discountBar.querySelector('.discount-bar-emoji');
-  const textElement = discountBar.querySelector('.discount-bar-text');
-  const timerElement = discountBar.querySelector('.discount-bar-timer');
-
-  // Get settings from data attributes
-  const settings = {
-    backgroundColor: discountBar.dataset.backgroundColor || '#FF5733',
-    textColor: discountBar.dataset.textColor || '#FFFFFF',
-    emoji: discountBar.dataset.emoji || '🔥',
-    timerDuration: parseInt(discountBar.dataset.timerDuration || '15', 10),
-    discountPercentage: parseInt(discountBar.dataset.discountPercentage || '15', 10),
-    barText: discountBar.dataset.barText || 'Limited time offer! {discount}% off your entire order!'
-  };
-
-  // Apply styles
-  container.style.backgroundColor = settings.backgroundColor;
-  container.style.color = settings.textColor;
-  emojiElement.textContent = settings.emoji;
-
-  // Check if a discount is already active
-  const savedDiscount = getSavedDiscount();
-  let discountCode = '';
-  let timeLeft = 0;
-  let timer;
-
-  if (isDiscountActive(savedDiscount)) {
-    // Use the existing discount
-    discountCode = savedDiscount.code;
-    const elapsedSeconds = Math.floor((Date.now() - savedDiscount.createdAt) / 1000);
-    timeLeft = Math.max(0, DEFAULT_DURATION_MINUTES * 60 - elapsedSeconds);
-
-    // Update the display
-    updateDiscountDisplay();
-    startTimer(timeLeft);
-  } else {
-    // For now, just display a mock timer with the discount percentage
-    // We'll implement the actual API call later
-    updateDiscountDisplay();
-    startTimer(DEFAULT_DURATION_MINUTES * 60);
-  }
-
-  // Handle click to apply discount
-  container.addEventListener('click', () => {
-    // Redirect to cart - in the simplified approach, this is just visual
-    window.location.href = '/cart';
-  });
-
-  /**
-   * Updates the display with discount information
-   */
-  function updateDiscountDisplay() {
-    // Format bar text
-    textElement.textContent = settings.barText
-      .replace('{discount}', settings.discountPercentage);
-  }
-
-  /**
-   * Starts the countdown timer
-   */
-  function startTimer(seconds) {
-    // Clear any existing timer
-    if (timer) {
-      clearInterval(timer);
+  /* Mobile optimization */
+  @media (max-width: 600px) {
+    .discount-bar-container {
+      flex-direction: column;
+      padding: 12px;
+      width: 95%;
     }
 
-    // Update timer display initially
-    timerElement.textContent = formatTime(seconds);
+    .discount-bar-emoji {
+      margin-right: 0;
+      margin-bottom: 8px;
+      font-size: 28px;
+    }
 
-    // Set up the timer
-    timer = setInterval(() => {
-      seconds -= 1;
-
-      if (seconds <= 0) {
-        clearInterval(timer);
-        seconds = 0;
-
-        // Reset the timer
-        startTimer(DEFAULT_DURATION_MINUTES * 60);
-      }
-
-      timerElement.textContent = formatTime(seconds);
-    }, 1000);
+    .discount-bar-timer {
+      margin-left: 0;
+      margin-top: 8px;
+    }
   }
+</style>
 
-  /**
-   * Formats seconds into MM:SS
-   */
-  function formatTime(timeInSeconds) {
-    const minutes = Math.floor(timeInSeconds / 60);
-    const seconds = timeInSeconds % 60;
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  }
-
-  /**
-   * Saves discount data to localStorage
-   */
-  function saveDiscount(discountData) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(discountData));
-  }
-
-  /**
-   * Gets saved discount data from localStorage
-   */
-  function getSavedDiscount() {
-    const savedData = localStorage.getItem(STORAGE_KEY);
-    return savedData ? JSON.parse(savedData) : null;
-  }
-
-  /**
-   * Checks if a saved discount is still active
-   */
-  function isDiscountActive(discountData) {
-    if (!discountData) return false;
-
-    const now = Date.now();
-    return discountData.expiresAt > now;
-  }
-})();
-</script>
-
+<script src="{{ 'discount-bar.js' | asset_url }}" defer></script>
