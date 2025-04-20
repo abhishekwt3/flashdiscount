@@ -3,7 +3,7 @@
 client_id = "0fc6ba34a6e6ea3e0df48a758dfa5437"
 name = "flashOff"
 handle = "flashoff"
-application_url = "https://athletes-screenshot-statement-flexibility.trycloudflare.com"
+application_url = "https://dress-favour-mainstream-nil.trycloudflare.com"
 embedded = true
 
 [build]
@@ -28,9 +28,9 @@ scopes = "write_products, write_discounts, write_metaobjects"
 
 [auth]
 redirect_urls = [
-  "https://athletes-screenshot-statement-flexibility.trycloudflare.com/auth/callback",
-  "https://athletes-screenshot-statement-flexibility.trycloudflare.com/auth/shopify/callback",
-  "https://athletes-screenshot-statement-flexibility.trycloudflare.com/api/auth/callback"
+  "https://dress-favour-mainstream-nil.trycloudflare.com/auth/callback",
+  "https://dress-favour-mainstream-nil.trycloudflare.com/auth/shopify/callback",
+  "https://dress-favour-mainstream-nil.trycloudflare.com/api/auth/callback"
 ]
 
 [pos]

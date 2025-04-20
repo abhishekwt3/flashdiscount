@@ -1,6 +1,6 @@
 // app/components/ColorPicker.jsx
 import { useState } from "react";
-import { Box, BlockStack, InlineStack, TextField, Popover, Icon } from "@shopify/polaris";
+import { Box, BlockStack, InlineStack, TextField, Popover } from "@shopify/polaris";
 
 export default function ColorPicker({ label, color, onChange }) {
   const [popoverActive, setPopoverActive] = useState(false);

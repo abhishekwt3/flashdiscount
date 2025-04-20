@@ -1,14 +1,29 @@
+// app/routes/api.generate-code.js
 import { json } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
-import { createAutomaticDiscount, generateDiscountCode } from "../models/DiscountCode.server";
 import { PrismaClient } from '@prisma/client';
 
 // Initialize Prisma client
 const prisma = new PrismaClient();
 
 /**
+ * Generate a random discount code
+ */
+function generateDiscountCode() {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let code = "";
+  for (let i = 0; i < 8; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+/**
  * API endpoint to create an automatic discount
- * This will be called by the theme app extension
+ *
+ * NOTE: This endpoint is no longer used in the main app flow, as discount creation
+ * has been moved directly into the app._index.jsx action handler to avoid authentication issues.
+ * This file is kept for reference or in case you want to revert to an API-based approach.
  */
 export async function loader({ request }) {
   console.log("API: Generate code endpoint called");
@@ -56,83 +71,119 @@ export async function loader({ request }) {
     const shop = session.shop;
     console.log("Authentication successful for shop:", shop);
 
-    // Get the settings for this shop
-    console.log("Fetching settings for shop:", shop);
-    const settings = await prisma.discountBarSettings.findFirst({
-      where: { shopId: shop, isActive: true }
-    });
+    // Get percentage from header or use default
+    const percentageHeader = request.headers.get('X-Discount-Percentage');
+    const percentage = percentageHeader ? parseInt(percentageHeader, 10) : 15;
 
-    console.log("Settings found:", settings ? "Yes" : "No");
+    console.log(`Creating ${percentage}% discount for shop:`, shop);
 
-    // If no active settings are found, use default values
-    const percentage = settings?.discountPercentage || 15;
-    const durationMinutes = 15; // Fixed 15 minutes duration
+    // Fixed 15 minutes duration
+    const durationMinutes = 15;
 
     // Generate a display code for UI
     const displayCode = generateDiscountCode();
     console.log("Generated display code:", displayCode);
 
-    // Try to create the automatic discount in Shopify
-    console.log(`Attempting to create ${percentage}% discount for ${durationMinutes} minutes`);
+    // Calculate expiry time (current time + 15 minutes)
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + durationMinutes * 60000);
 
-    let discount;
-    let discountError = null;
+    // Create the automatic discount in Shopify
+    const CREATE_DISCOUNT_MUTATION = `
+      mutation discountAutomaticBasicCreate($automaticBasicDiscount: DiscountAutomaticBasicInput!) {
+        discountAutomaticBasicCreate(automaticBasicDiscount: $automaticBasicDiscount) {
+          automaticDiscountNode {
+            id
+            automaticDiscount {
+              ... on DiscountAutomaticBasic {
+                title
+                startsAt
+                endsAt
+              }
+            }
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
 
+    // Convert percentage to decimal (e.g., 10% becomes 0.1)
+    const decimalPercentage = parseFloat(percentage) / 100;
+
+    const variables = {
+      automaticBasicDiscount: {
+        title: `Flash Sale - ${percentage}% Off (${now.getTime()})`,
+        startsAt: now.toISOString(),
+        endsAt: expiresAt.toISOString(),
+        minimumRequirement: {
+          subtotal: {
+            greaterThanOrEqualToSubtotal: "0.01"
+          }
+        },
+        customerGets: {
+          value: {
+            percentage: decimalPercentage
+          },
+          items: {
+            all: true
+          }
+        },
+        combinesWith: {
+          productDiscounts: false,
+          shippingDiscounts: true,
+          orderDiscounts: false
+        }
+      }
+    };
+
+    console.log("Creating discount with variables:", JSON.stringify(variables));
+
+    const response = await admin.graphql(CREATE_DISCOUNT_MUTATION, {
+      variables,
+    });
+
+    const responseJson = await response.json();
+    console.log("Discount creation response:", JSON.stringify(responseJson));
+
+    if (responseJson.errors) {
+      throw new Error(`GraphQL errors: ${JSON.stringify(responseJson.errors)}`);
+    }
+
+    const { userErrors } = responseJson.data.discountAutomaticBasicCreate;
+    if (userErrors && userErrors.length > 0) {
+      throw new Error(`User errors: ${JSON.stringify(userErrors)}`);
+    }
+
+    const discountId = responseJson.data.discountAutomaticBasicCreate.automaticDiscountNode.id;
+
+    // Save successful discount to database
     try {
-      // Pass the admin object directly (not the session)
-      discount = await createAutomaticDiscount(admin, {
-        percentage,
-        durationMinutes
+      await prisma.discountCode.create({
+        data: {
+          shopId: shop,
+          code: displayCode,
+          discountPercentage: percentage,
+          isAutomatic: true,
+          discountId: discountId,
+          expiresAt
+        }
       });
-
-      console.log("Discount created successfully:", discount);
-
-      // Save successful discount to database
-      try {
-        await prisma.discountCode.create({
-          data: {
-            shopId: shop,
-            code: displayCode,
-            discountPercentage: percentage,
-            isAutomatic: true,
-            discountId: discount.id,
-            expiresAt: new Date(Date.now() + durationMinutes * 60000)
-          }
-        });
-        console.log("Discount saved to database");
-      } catch (dbError) {
-        console.error("Error saving discount to database:", dbError);
-        // Continue even if DB save fails
-      }
-
-    } catch (discountCreationError) {
-      console.error("Error creating discount:", discountCreationError);
-      discountError = discountCreationError.message;
-
-      // Save the failed attempt to database for tracking
-      try {
-        await prisma.discountCode.create({
-          data: {
-            shopId: shop,
-            code: displayCode,
-            discountPercentage: percentage,
-            isAutomatic: false,
-            expiresAt: new Date(Date.now() + durationMinutes * 60000)
-          }
-        });
-        console.log("Failed discount attempt saved to database");
-      } catch (dbError) {
-        console.error("Error saving failed discount to database:", dbError);
-      }
+      console.log("Discount saved to database");
+    } catch (dbError) {
+      console.error("Error saving discount to database:", dbError);
+      // Continue even if DB save fails
     }
 
     return json({
-      success: !!discount,
+      success: true,
       code: displayCode,
       isAutomatic: true,
       percentage: percentage,
-      discount: discount || null,
-      error: discountError
+      discountId: discountId,
+      expiresAt: expiresAt.toISOString()
     });
 
   } catch (error) {

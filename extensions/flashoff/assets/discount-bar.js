@@ -1,15 +1,29 @@
-// Discount Bar Popup Script - With proper conditions
+// Updated Discount Bar Popup Script handling homepage redirect
 (function() {
   console.log('Discount Bar Script Loaded');
 
   // Constants
   const PROXY_PATH = '/apps/flashoff'; // App proxy path
-  const DISCOUNT_ENDPOINT = `${PROXY_PATH}/api/generate-code`;
   const STORAGE_KEY = 'flashoff_discount_data';
   const SESSION_START_KEY = 'flashoff_session_start';
   const POPUP_SHOWN_KEY = 'flashoff_popup_shown';
+  const DISCOUNT_APPLIED_KEY = 'flashoff_discount_applied';
   const DEFAULT_DURATION_MINUTES = 15;
   const CART_CHECK_INTERVAL = 5000; // Check cart every 5 seconds
+
+  // See if we just applied a discount and need to go to cart
+  const discountJustApplied = localStorage.getItem(DISCOUNT_APPLIED_KEY);
+
+  if (discountJustApplied) {
+    // We just came back from the discount page to the homepage
+    // Clear the flag and redirect to cart
+    localStorage.removeItem(DISCOUNT_APPLIED_KEY);
+    console.log('Detected return from discount page, redirecting to cart');
+
+    // Go to cart page
+    window.location.href = '/cart';
+    return; // Stop execution
+  }
 
   // Get the discount bar element
   const discountBar = document.getElementById('discount-bar-app');
@@ -36,7 +50,9 @@
     discountPercentage: parseInt(discountBar.dataset.discountPercentage || '15', 10),
     barText: discountBar.dataset.barText || 'Limited time offer! {discount}% off your order! Click to apply discount.',
     sessionThreshold: parseInt(discountBar.dataset.sessionThreshold || '60', 10), // Default 60 seconds
-    requireCartItems: discountBar.dataset.requireCartItems !== 'false' // Default true
+    requireCartItems: discountBar.dataset.requireCartItems !== 'false', // Default true
+    currentDiscountCode: discountBar.dataset.discountCode || '',
+    isAutomatic: discountBar.dataset.isAutomatic === 'true'
   };
 
   console.log('Settings loaded:', settings);
@@ -63,6 +79,7 @@
   let timeLeft = 0;
   let timer;
   let cartChecker;
+  let isAutomatic = false;
 
   // Add event listeners
   if (closeButton) {
@@ -74,15 +91,43 @@
 
   // Handle click to apply discount
   container.addEventListener('click', () => {
-    console.log('Discount bar clicked');
-    window.location.href = '/cart';
+    console.log('Discount bar clicked, discount code:', discountCode);
+
+    if (discountCode) {
+      if (isAutomatic) {
+        // If it's an automatic discount, just go to cart
+        window.location.href = '/cart';
+      } else {
+        // For code-based discounts, use the discount URL with tracking
+        applyDiscountWithTracking(discountCode);
+      }
+    }
   });
 
   // Start checking for conditions to show popup
   if (!popupAlreadyShown) {
     startCartAndSessionCheck();
   } else {
-    console.log('Popup already shown in this session, not showing again');
+    console.log('Popup already shown in this session, checking for active discount');
+    const savedDiscount = getSavedDiscount();
+    if (savedDiscount && isDiscountActive(savedDiscount)) {
+      console.log('Active discount found, showing popup');
+      showDiscountPopup();
+    }
+  }
+
+  /**
+   * Apply a discount code with tracking to handle the homepage redirect
+   */
+  function applyDiscountWithTracking(code) {
+    console.log(`Applying discount code with tracking: ${code}`);
+
+    // Set a flag that we're applying a discount
+    // This will be checked when we return to the homepage
+    localStorage.setItem(DISCOUNT_APPLIED_KEY, 'true');
+
+    // Redirect to the discount URL
+    window.location.href = `/discount/${code}`;
   }
 
   /**
@@ -158,17 +203,51 @@
     if (isDiscountActive(savedDiscount)) {
       // Use the existing discount
       discountCode = savedDiscount.code;
+      isAutomatic = savedDiscount.isAutomatic;
       const elapsedSeconds = Math.floor((Date.now() - savedDiscount.createdAt) / 1000);
-      timeLeft = Math.max(0, DEFAULT_DURATION_MINUTES * 60 - elapsedSeconds);
+      timeLeft = savedDiscount.expiresAt ? Math.max(0, Math.floor((savedDiscount.expiresAt - Date.now()) / 1000)) : DEFAULT_DURATION_MINUTES * 60;
 
-      console.log(`Using existing discount code: ${discountCode}, time left: ${timeLeft}s`);
+      console.log(`Using existing discount code: ${discountCode}, isAutomatic: ${isAutomatic}, time left: ${timeLeft}s`);
 
       // Update the display
       updateDiscountDisplay();
-      startTimer(timeLeft);
+
+      if (savedDiscount.expiresAt) {
+        startTimer(timeLeft);
+      } else {
+        // No expiry, show permanent text
+        if (timerElement) {
+          timerElement.textContent = "No expiry";
+        }
+      }
+    } else if (settings.currentDiscountCode) {
+      // Use the current discount code from settings
+      discountCode = settings.currentDiscountCode;
+      isAutomatic = settings.isAutomatic;
+
+      console.log(`Using current discount code from settings: ${discountCode}, isAutomatic: ${isAutomatic}`);
+
+      // Save this discount for future reference
+      const discountData = {
+        code: discountCode,
+        percentage: settings.discountPercentage,
+        createdAt: Date.now(),
+        expiresAt: null, // We don't know the expiry from settings
+        isAutomatic: isAutomatic
+      };
+
+      saveDiscount(discountData);
+
+      // Update the display
+      updateDiscountDisplay();
+
+      // Set no timer as we don't know the expiry
+      if (timerElement) {
+        timerElement.textContent = "Limited time";
+      }
     } else {
       // Generate a new discount
-      console.log('Generating new discount code');
+      console.log('No active discount found, generating mock code');
       generateNewDiscount();
     }
 
@@ -182,6 +261,18 @@
       discountBar.style.opacity = '1';
       discountBar.style.transform = 'translateY(0)';
     }, 50);
+
+    // Update click text based on automatic vs code discount
+    updateClickBadge();
+  }
+
+  /**
+   * Update the badge text based on discount type
+   */
+  function updateClickBadge() {
+    // Update container class
+    const containerClass = isAutomatic ? "auto-discount" : "code-discount";
+    container.className = `discount-bar-container ${containerClass}`;
   }
 
   /**
@@ -207,12 +298,16 @@
     const code = generateMockCode();
     console.log(`Generated mock code: ${code}`);
 
+    // For our demo, let's assume this is not an automatic discount
+    isAutomatic = false;
+
     // Store the discount data
     const discountData = {
       code: code,
       percentage: settings.discountPercentage,
       createdAt: Date.now(),
-      expiresAt: Date.now() + (DEFAULT_DURATION_MINUTES * 60 * 1000)
+      expiresAt: Date.now() + (DEFAULT_DURATION_MINUTES * 60 * 1000),
+      isAutomatic: isAutomatic
     };
 
     saveDiscount(discountData);
@@ -222,6 +317,9 @@
     timeLeft = DEFAULT_DURATION_MINUTES * 60;
     updateDiscountDisplay();
     startTimer(timeLeft);
+
+    // Update badge and container class
+    updateClickBadge();
   }
 
   /**
@@ -240,9 +338,19 @@
    * Updates the display with discount information
    */
   function updateDiscountDisplay() {
-    // Format bar text
-    textElement.textContent = settings.barText
+    // Update text with proper discount code instructions
+    let displayText = settings.barText
       .replace('{discount}', settings.discountPercentage);
+
+    if (!isAutomatic) {
+      // Add code to the display text if it's not automatic
+      displayText = displayText.replace('automatically applied', `use code "${discountCode}"`);
+      if (!displayText.includes(discountCode)) {
+        displayText += ` Use code: ${discountCode}`;
+      }
+    }
+
+    textElement.textContent = displayText;
   }
 
   /**
@@ -300,6 +408,9 @@
   function isDiscountActive(discountData) {
     if (!discountData) return false;
 
+    // If no expiry, it's always active
+    if (!discountData.expiresAt) return true;
+
     const now = Date.now();
     return discountData.expiresAt > now;
   }
@@ -312,6 +423,7 @@
     localStorage.removeItem(SESSION_START_KEY);
     localStorage.removeItem(POPUP_SHOWN_KEY);
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(DISCOUNT_APPLIED_KEY);
     console.log('FlashOff session data cleared. Refresh the page to start a new session.');
   };
 

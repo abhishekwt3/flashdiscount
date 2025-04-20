@@ -26,6 +26,9 @@
 {% assign session_threshold_number = session_threshold | times: 1 | default: 60 %}
 {% assign require_cart_items = settings_data | split: '"requireCartItems":' | last | split: ',' | first | default: "true" %}
 {% assign is_active = settings_data | split: '"isActive":' | last | split: ',' | first | default: "true" %}
+{% assign current_discount_code = settings_data | split: '"currentDiscountCode":"' | last | split: '"' | first | default: "" %}
+{% assign is_automatic = settings_data | split: '"isAutomatic":' | last | split: ',' | first | default: "true" %}
+{% assign once_per_customer = settings_data | split: '"oncePerCustomer":' | last | split: ',' | first | default: "false" %}
 
 <div
   id="discount-bar-app"
@@ -37,6 +40,9 @@
   data-bar-text="{{ bar_text }}"
   data-session-threshold="{{ session_threshold_number }}"
   data-require-cart-items="{{ require_cart_items }}"
+  data-discount-code="{{ current_discount_code }}"
+  data-is-automatic="{{ is_automatic }}"
+  data-once-per-customer="{{ once_per_customer }}"
 >
   <div class="discount-bar-container">
     <span class="discount-bar-close">&times;</span>
@@ -89,6 +95,11 @@
     margin-right: 12px;
   }
 
+  .discount-bar-text {
+    flex: 1;
+    font-size: 14px;
+  }
+
   .discount-bar-timer {
     margin-left: 12px;
     display: flex;
@@ -97,6 +108,8 @@
     padding: 4px 8px;
     border-radius: 4px;
     font-weight: bold;
+    min-width: 50px;
+    justify-content: center;
   }
 
   .discount-bar-close {
@@ -126,6 +139,15 @@
     padding: 2px 6px;
     border-radius: 10px;
     font-weight: bold;
+  }
+
+  /* Different badge text for different discount types */
+  .discount-bar-container.auto-discount::after {
+    content: "AUTO-APPLIED";
+  }
+
+  .discount-bar-container.code-discount::after {
+    content: "CLICK TO APPLY";
   }
 
   /* Mobile optimization */
