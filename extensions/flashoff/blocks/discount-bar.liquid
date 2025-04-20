@@ -14,14 +14,14 @@
 {% assign settings_data = shop.metafields.flashoff.settings | default: '{}' %}
 
 {% comment %} Extract individual settings using split method {% endcomment %}
-{% assign background_color = settings_data | split: '"backgroundColor":"' | last | split: '"' | first | default: "#FF5733" %}
-{% assign text_color = settings_data | split: '"textColor":"' | last | split: '"' | first | default: "#FFFFFF" %}
-{% assign emoji = settings_data | split: '"emoji":"' | last | split: '"' | first | default: "🔥" %}
+{% assign background_color = settings_data | split: '"backgroundColor":"' | last | split: '"' | first | default: "#E8F7E9" %}
+{% assign text_color = settings_data | split: '"textColor":"' | last | split: '"' | first | default: "#000000" %}
+{% assign emoji = settings_data | split: '"emoji":"' | last | split: '"' | first | default: "😊" %}
 {% assign timer_duration = settings_data | split: '"timerDuration":' | last | split: ',' | first | default: "15" %}
 {% assign timer_duration_number = timer_duration | times: 1 | default: 15 %}
-{% assign discount_percentage = settings_data | split: '"discountPercentage":' | last | split: ',' | first | default: "15" %}
-{% assign discount_percentage_number = discount_percentage | times: 1 | default: 15 %}
-{% assign bar_text = settings_data | split: '"barText":"' | last | split: '"' | first | default: "Don't leave your items behind! Get {discount}% off if you complete your purchase now!" %}
+{% assign discount_percentage = settings_data | split: '"discountPercentage":' | last | split: ',' | first | default: "20" %}
+{% assign discount_percentage_number = discount_percentage | times: 1 | default: 20 %}
+{% assign bar_text = settings_data | split: '"barText":"' | last | split: '"' | first | default: "Surprise offer just for you ! Get {discount}% off on if you place your order within 15 minutes !" %}
 {% assign session_threshold = settings_data | split: '"sessionThreshold":' | last | split: ',' | first | default: "60" %}
 {% assign session_threshold_number = session_threshold | times: 1 | default: 60 %}
 {% assign require_cart_items = settings_data | split: '"requireCartItems":' | last | split: ',' | first | default: "true" %}
@@ -44,15 +44,41 @@
   data-is-automatic="{{ is_automatic }}"
   data-once-per-customer="{{ once_per_customer }}"
 >
-  <div class="discount-bar-container">
-    <span class="discount-bar-close">&times;</span>
-    <span class="discount-bar-emoji"></span>
-    <span class="discount-bar-text"></span>
-    <span class="discount-bar-timer"></span>
+  <div class="discount-wrapper">
+    <!-- Small timer bar in top right -->
+    <div class="timer-bar">
+      <span class="timer-label">Time Left:</span>
+      <span class="discount-bar-timer"></span>
+      <span class="discount-bar-close">&times;</span>
+    </div>
+    
+    <!-- Main discount bar container -->
+    <div class="discount-bar-container">
+      <!-- Main content area -->
+      <div class="discount-bar-content">
+        <div class="discount-bar-emoji"></div>
+        <div class="discount-bar-message">
+          <span class="discount-bar-text"></span>
+        </div>
+      </div>
+      
+      <!-- Apply button at bottom -->
+      <div class="discount-bar-apply">
+        <span class="apply-button">APPLY OFFER</span>
+      </div>
+    </div>
   </div>
 </div>
 
 <style>
+  /* Reset styles to prevent theme interference */
+  #discount-bar-app * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 5px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+
   #discount-bar-app {
     position: fixed;
     bottom: 20px;
@@ -68,105 +94,145 @@
     transition: opacity 0.3s ease, transform 0.3s ease;
   }
 
-  .discount-bar-container {
-    width: 90%;
-    max-width: 400px;
-    min-height: 75px;
-    border-radius: 6px;
+  .discount-wrapper {
+    position: relative;
+    width: 400px;
+    height: 110px; /* Increased height to accommodate button */
+    padding: 5px; /* Added 5px padding to the wrapper */
+    overflow: visible; /* Ensure content that overflows is visible */
+  }
+
+  /* Timer bar - small, positioned in top right */
+  .timer-bar {
+    position: absolute;
+    top: 0;
+    right: 10px;
+    background-color: #FFFFFF;
+    color: #FF0000;
+    border-radius: 8px;
+    padding: 2px 10px;
     display: flex;
     align-items: center;
-    justify-content: center;
-    padding: 16px;
-    margin: 0 auto;
-    cursor: pointer;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-    position: relative;
-    text-align: center;
+    min-width: 170px;
+    height: 22px;
+    z-index: 10000;
+    font-weight: bold;
+    font-size: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    border: 1px solid #EEEEEE;
+    justify-content: space-between; /* This will push items apart */
   }
 
-  .discount-bar-container:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0,0,0,0.25);
-  }
-
-  .discount-bar-emoji {
-    font-size: 24px;
-    margin-right: 12px;
-  }
-
-  .discount-bar-text {
-    flex: 1;
-    font-size: 14px;
+  .timer-label {
+    margin-right: 2px; /* Reduced from 5px to minimize gap */
   }
 
   .discount-bar-timer {
-    margin-left: 12px;
-    display: flex;
-    align-items: center;
-    background: rgba(0,0,0,0.1);
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-weight: bold;
-    min-width: 50px;
-    justify-content: center;
+    flex: 1;
   }
 
   .discount-bar-close {
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 5px;
+    color: #555555;
+  }
+
+  /* Main discount bar */
+  .discount-bar-container {
     position: absolute;
-    top: 5px;
-    right: 10px;
-    font-size: 20px;
+    top: 20px;
+    width: 100%;
+    background-color: #FF5733;
+    color: #FFFFFF;
+    border-radius: 10px;
+    overflow: visible; /* Changed from hidden to allow button to show outside */
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    border: 1px solid #DDDDDD;
+    padding-bottom: 12px; /* Add padding at bottom for button space */
+  }
+
+  /* Main content with emoji and text */
+  .discount-bar-content {
+    display: flex;
+    padding: 10px 15px 10px;
+    align-items: center;
+    min-height: 55px;
+  }
+
+  .discount-bar-emoji {
+    font-size: 38px;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 10px; 
+    flex-shrink: 0;
+    border-right: 5px solid transparent; /* Add invisible border for spacing */
+  }
+
+  .discount-bar-message {
+    flex: 1;
+    padding-left: 5px; /* Add padding to create space from emoji */
+  }
+
+  .discount-bar-text {
+    font-size: 14px;
+    line-height: 1.3;
+    display: block;
+    word-wrap: break-word;
+    max-height: 40px;
+    overflow: hidden;
+    white-space: normal;
+  }
+
+  /* Apply button at bottom */
+  .discount-bar-apply {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    position: absolute;
+    bottom: -13px;
+    left: 0;
+    right: 0;
+    z-index: 10001; /* Ensure it appears above the main container */
+  }
+
+  .apply-button {
+    background-color: #00ab5e;
+    color: white;
+    height: 16px;
+    line-height: 8px;
+    padding: 0 15px;
+    border-radius: 8px;
+    font-size: 9px;
+    text-transform: uppercase;
     font-weight: bold;
     cursor: pointer;
-    opacity: 0.7;
-    transition: opacity 0.2s ease;
-  }
-
-  .discount-bar-close:hover {
-    opacity: 1;
-  }
-
-  /* Add a small badge to indicate clickable */
-  .discount-bar-container::after {
-    content: "CLICK TO SAVE";
-    position: absolute;
-    bottom: -10px;
-    right: 10px;
-    background: #00a881;
-    color: white;
-    font-size: 10px;
-    padding: 2px 6px;
-    border-radius: 10px;
-    font-weight: bold;
-  }
-
-  /* Different badge text for different discount types */
-  .discount-bar-container.auto-discount::after {
-    content: "AUTO-APPLIED";
-  }
-
-  .discount-bar-container.code-discount::after {
-    content: "CLICK TO APPLY";
+    display: inline-block;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 100px;
+    max-width: 100px;
+    text-align: center;
   }
 
   /* Mobile optimization */
-  @media (max-width: 600px) {
-    .discount-bar-container {
-      flex-direction: column;
-      padding: 12px;
+  @media (max-width: 480px) {
+    .discount-wrapper {
       width: 95%;
     }
-
-    .discount-bar-emoji {
-      margin-right: 0;
-      margin-bottom: 8px;
-      font-size: 28px;
-    }
-
-    .discount-bar-timer {
-      margin-left: 0;
-      margin-top: 8px;
+    
+    .timer-bar {
+      right: 0;
     }
   }
 </style>

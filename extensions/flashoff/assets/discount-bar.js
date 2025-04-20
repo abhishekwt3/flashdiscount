@@ -1,4 +1,4 @@
-// Updated Discount Bar Popup Script handling homepage redirect
+// Updated Discount Bar Popup Script for the proper layout
 (function() {
   console.log('Discount Bar Script Loaded');
 
@@ -40,15 +40,16 @@
   const textElement = discountBar.querySelector('.discount-bar-text');
   const timerElement = discountBar.querySelector('.discount-bar-timer');
   const closeButton = discountBar.querySelector('.discount-bar-close');
+  const applyButton = discountBar.querySelector('.apply-button');
 
   // Get settings from data attributes
   const settings = {
-    backgroundColor: discountBar.dataset.backgroundColor || '#FF5733',
-    textColor: discountBar.dataset.textColor || '#FFFFFF',
-    emoji: discountBar.dataset.emoji || '🔥',
+    backgroundColor: discountBar.dataset.backgroundColor || '#E8F7E9',
+    textColor: discountBar.dataset.textColor || '#000000',
+    emoji: discountBar.dataset.emoji || '😊',
     timerDuration: parseInt(discountBar.dataset.timerDuration || '15', 10),
-    discountPercentage: parseInt(discountBar.dataset.discountPercentage || '15', 10),
-    barText: discountBar.dataset.barText || 'Limited time offer! {discount}% off your order! Click to apply discount.',
+    discountPercentage: parseInt(discountBar.dataset.discountPercentage || '20', 10),
+    barText: discountBar.dataset.barText || 'Surprise offer just for you ! Get {discount}% off on if you place your order within 15 minutes !',
     sessionThreshold: parseInt(discountBar.dataset.sessionThreshold || '60', 10), // Default 60 seconds
     requireCartItems: discountBar.dataset.requireCartItems !== 'false', // Default true
     currentDiscountCode: discountBar.dataset.discountCode || '',
@@ -57,7 +58,7 @@
 
   console.log('Settings loaded:', settings);
 
-  // Apply styles
+  // Apply styles from settings
   container.style.backgroundColor = settings.backgroundColor;
   container.style.color = settings.textColor;
   emojiElement.textContent = settings.emoji;
@@ -90,7 +91,16 @@
   }
 
   // Handle click to apply discount
-  container.addEventListener('click', () => {
+  container.addEventListener('click', handleContainerClick);
+  
+  if (applyButton) {
+    applyButton.addEventListener('click', function(e) {
+      e.stopPropagation(); // Prevent event bubbling
+      handleContainerClick(e);
+    });
+  }
+
+  function handleContainerClick(e) {
     console.log('Discount bar clicked, discount code:', discountCode);
 
     if (discountCode) {
@@ -102,7 +112,7 @@
         applyDiscountWithTracking(discountCode);
       }
     }
-  });
+  }
 
   // Start checking for conditions to show popup
   if (!popupAlreadyShown) {
@@ -241,14 +251,19 @@
       // Update the display
       updateDiscountDisplay();
 
-      // Set no timer as we don't know the expiry
+      // Set timer to 15 minutes by default
       if (timerElement) {
-        timerElement.textContent = "Limited time";
+        startTimer(15 * 60);
       }
     } else {
       // Generate a new discount
       console.log('No active discount found, generating mock code');
       generateNewDiscount();
+    }
+
+    // Update the apply button text
+    if (applyButton) {
+      applyButton.textContent = isAutomatic ? "SHOP NOW" : "APPLY OFFER";
     }
 
     // Show the popup with animation
@@ -261,18 +276,6 @@
       discountBar.style.opacity = '1';
       discountBar.style.transform = 'translateY(0)';
     }, 50);
-
-    // Update click text based on automatic vs code discount
-    updateClickBadge();
-  }
-
-  /**
-   * Update the badge text based on discount type
-   */
-  function updateClickBadge() {
-    // Update container class
-    const containerClass = isAutomatic ? "auto-discount" : "code-discount";
-    container.className = `discount-bar-container ${containerClass}`;
   }
 
   /**
@@ -292,7 +295,7 @@
    * Generates a new discount code for display purposes
    */
   function generateNewDiscount() {
-    // This is a simplified version for now - it just creates a mock discount code
+    // This is a simplified version - it just creates a mock discount code
     // In a real implementation, you would call your API to generate a real code
 
     const code = generateMockCode();
@@ -317,9 +320,6 @@
     timeLeft = DEFAULT_DURATION_MINUTES * 60;
     updateDiscountDisplay();
     startTimer(timeLeft);
-
-    // Update badge and container class
-    updateClickBadge();
   }
 
   /**
@@ -342,14 +342,14 @@
     let displayText = settings.barText
       .replace('{discount}', settings.discountPercentage);
 
-    if (!isAutomatic) {
+    if (!isAutomatic && discountCode) {
       // Add code to the display text if it's not automatic
-      displayText = displayText.replace('automatically applied', `use code "${discountCode}"`);
       if (!displayText.includes(discountCode)) {
-        displayText += ` Use code: ${discountCode}`;
+        displayText += ` ${discountCode}`;
       }
     }
-
+    
+    // Set the text
     textElement.textContent = displayText;
   }
 
@@ -417,7 +417,6 @@
 
   /**
    * Clear session data - for testing purposes
-   * Can be called from console: window.clearFlashOffSession()
    */
   window.clearFlashOffSession = function() {
     localStorage.removeItem(SESSION_START_KEY);
@@ -429,7 +428,6 @@
 
   /**
    * Force show the popup - for testing purposes
-   * Can be called from console: window.showDiscountPopup()
    */
   window.showDiscountPopup = showDiscountPopup;
 })();
