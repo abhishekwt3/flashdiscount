@@ -1,4 +1,4 @@
-// Updated Discount Bar Popup Script for the proper layout
+// Updated Discount Bar Popup Script with auto-hide after timer expires
 (function() {
   console.log('Discount Bar Script Loaded');
 
@@ -7,6 +7,7 @@
   const STORAGE_KEY = 'flashoff_discount_data';
   const SESSION_START_KEY = 'flashoff_session_start';
   const POPUP_SHOWN_KEY = 'flashoff_popup_shown';
+  const POPUP_DISMISSED_KEY = 'flashoff_popup_dismissed';
   const DISCOUNT_APPLIED_KEY = 'flashoff_discount_applied';
   const DEFAULT_DURATION_MINUTES = 15;
   const CART_CHECK_INTERVAL = 5000; // Check cart every 5 seconds
@@ -23,6 +24,13 @@
     // Go to cart page
     window.location.href = '/cart';
     return; // Stop execution
+  }
+
+  // Check if popup was previously dismissed
+  const popupDismissed = localStorage.getItem(POPUP_DISMISSED_KEY) === 'true';
+  if (popupDismissed) {
+    console.log('Popup was previously dismissed, not showing');
+    return; // Stop execution if already dismissed
   }
 
   // Get the discount bar element
@@ -86,13 +94,13 @@
   if (closeButton) {
     closeButton.addEventListener('click', function(e) {
       e.stopPropagation(); // Prevent triggering the container click
-      hideDiscountBar();
+      dismissPopupPermanently();
     });
   }
 
   // Handle click to apply discount
   container.addEventListener('click', handleContainerClick);
-  
+
   if (applyButton) {
     applyButton.addEventListener('click', function(e) {
       e.stopPropagation(); // Prevent event bubbling
@@ -102,6 +110,9 @@
 
   function handleContainerClick(e) {
     console.log('Discount bar clicked, discount code:', discountCode);
+
+    // Mark as dismissed permanently
+    dismissPopupPermanently();
 
     if (discountCode) {
       if (isAutomatic) {
@@ -114,10 +125,20 @@
     }
   }
 
+  // Function to permanently dismiss the popup
+  function dismissPopupPermanently() {
+    // Hide the popup
+    hideDiscountBar();
+
+    // Mark as dismissed in localStorage - this ensures it won't show again
+    localStorage.setItem(POPUP_DISMISSED_KEY, 'true');
+    console.log('Popup dismissed permanently');
+  }
+
   // Start checking for conditions to show popup
-  if (!popupAlreadyShown) {
+  if (!popupAlreadyShown && !popupDismissed) {
     startCartAndSessionCheck();
-  } else {
+  } else if (!popupDismissed) {
     console.log('Popup already shown in this session, checking for active discount');
     const savedDiscount = getSavedDiscount();
     if (savedDiscount && isDiscountActive(savedDiscount)) {
@@ -160,6 +181,13 @@
    * Check cart contents and session time to decide if popup should appear
    */
   function checkCartAndSession() {
+    // If popup was dismissed, don't show it again
+    if (localStorage.getItem(POPUP_DISMISSED_KEY) === 'true') {
+      console.log('Popup was dismissed, stopping checks');
+      clearInterval(cartChecker);
+      return;
+    }
+
     // Get session duration in seconds
     const sessionStart = parseInt(localStorage.getItem(SESSION_START_KEY) || Date.now().toString(), 10);
     const sessionDuration = Math.floor((Date.now() - sessionStart) / 1000);
@@ -203,6 +231,12 @@
    * Show the discount popup and generate a code
    */
   function showDiscountPopup() {
+    // If popup was dismissed, don't show it
+    if (localStorage.getItem(POPUP_DISMISSED_KEY) === 'true') {
+      console.log('Popup was dismissed, not showing');
+      return;
+    }
+
     // Mark popup as shown for this session
     localStorage.setItem(POPUP_SHOWN_KEY, 'true');
     console.log('Showing discount popup and marking as shown');
@@ -225,10 +259,12 @@
       if (savedDiscount.expiresAt) {
         startTimer(timeLeft);
       } else {
-        // No expiry, show permanent text
+        // No expiry, show "No expiry" text but still start a timer to hide popup after the set duration
         if (timerElement) {
           timerElement.textContent = "No expiry";
         }
+        // Even if discount doesn't expire, hide the popup after the configured timer duration
+        startTimerToHidePopup(settings.timerDuration * 60);
       }
     } else if (settings.currentDiscountCode) {
       // Use the current discount code from settings
@@ -251,19 +287,42 @@
       // Update the display
       updateDiscountDisplay();
 
-      // Set timer to 15 minutes by default
+      // Start the timer - this will now hide the popup when it reaches zero
       if (timerElement) {
-        startTimer(15 * 60);
+        startTimer(settings.timerDuration * 60);
       }
     } else {
-      // Generate a new discount
-      console.log('No active discount found, generating mock code');
-      generateNewDiscount();
+      // Generate a new discount but don't show the code
+      console.log('Using automatic discount without code');
+
+      // Set as automatic discount
+      isAutomatic = true;
+
+      // Use empty code
+      discountCode = '';
+
+      // Store discount data without a code
+      const discountData = {
+        code: '',
+        percentage: settings.discountPercentage,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + (DEFAULT_DURATION_MINUTES * 60 * 1000),
+        isAutomatic: true
+      };
+
+      saveDiscount(discountData);
+
+      // Update display without a code
+      updateDiscountDisplay();
+
+      // Start timer
+      timeLeft = DEFAULT_DURATION_MINUTES * 60;
+      startTimer(timeLeft);
     }
 
     // Update the apply button text
     if (applyButton) {
-      applyButton.textContent = isAutomatic ? "SHOP NOW" : "APPLY OFFER";
+      applyButton.textContent = "APPLY OFFER";
     }
 
     // Show the popup with animation
@@ -292,69 +351,26 @@
   }
 
   /**
-   * Generates a new discount code for display purposes
-   */
-  function generateNewDiscount() {
-    // This is a simplified version - it just creates a mock discount code
-    // In a real implementation, you would call your API to generate a real code
-
-    const code = generateMockCode();
-    console.log(`Generated mock code: ${code}`);
-
-    // For our demo, let's assume this is not an automatic discount
-    isAutomatic = false;
-
-    // Store the discount data
-    const discountData = {
-      code: code,
-      percentage: settings.discountPercentage,
-      createdAt: Date.now(),
-      expiresAt: Date.now() + (DEFAULT_DURATION_MINUTES * 60 * 1000),
-      isAutomatic: isAutomatic
-    };
-
-    saveDiscount(discountData);
-
-    // Update UI
-    discountCode = code;
-    timeLeft = DEFAULT_DURATION_MINUTES * 60;
-    updateDiscountDisplay();
-    startTimer(timeLeft);
-  }
-
-  /**
-   * Generate a mock discount code
-   */
-  function generateMockCode() {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let code = "";
-    for (let i = 0; i < 8; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
-  }
-
-  /**
-   * Updates the display with discount information
+   * Updates the display with discount information - WITHOUT showing code
    */
   function updateDiscountDisplay() {
-    // Update text with proper discount code instructions
+    // Update text with proper discount code instructions but NEVER show the code
     let displayText = settings.barText
       .replace('{discount}', settings.discountPercentage);
 
-    if (!isAutomatic && discountCode) {
-      // Add code to the display text if it's not automatic
-      if (!displayText.includes(discountCode)) {
-        displayText += ` ${discountCode}`;
-      }
-    }
-    
-    // Set the text
+    // Remove any references to discount codes
+    displayText = displayText.replace(/\b(use\s+code|code)[:\s]*/gi, '');
+    displayText = displayText.replace(/\s+\b[A-Z0-9]{6,}\b/g, '');
+
+    // Clean up double spaces
+    displayText = displayText.replace(/\s+/g, ' ').trim();
+
+    // Set the text WITHOUT the code
     textElement.textContent = displayText;
   }
 
   /**
-   * Starts the countdown timer
+   * Starts the countdown timer that will dismiss the popup when it reaches zero
    */
   function startTimer(seconds) {
     // Clear any existing timer
@@ -372,10 +388,22 @@
       if (seconds <= 0) {
         clearInterval(timer);
         seconds = 0;
+        // When timer reaches zero, hide the popup and prevent it from showing again
+        dismissPopupPermanently();
       }
 
       timerElement.textContent = formatTime(seconds);
     }, 1000);
+  }
+
+  /**
+   * Starts a timer to hide the popup after a duration, without showing countdown
+   * Used for "no expiry" discounts
+   */
+  function startTimerToHidePopup(seconds) {
+    setTimeout(() => {
+      dismissPopupPermanently();
+    }, seconds * 1000);
   }
 
   /**
@@ -421,6 +449,7 @@
   window.clearFlashOffSession = function() {
     localStorage.removeItem(SESSION_START_KEY);
     localStorage.removeItem(POPUP_SHOWN_KEY);
+    localStorage.removeItem(POPUP_DISMISSED_KEY);
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(DISCOUNT_APPLIED_KEY);
     console.log('FlashOff session data cleared. Refresh the page to start a new session.');

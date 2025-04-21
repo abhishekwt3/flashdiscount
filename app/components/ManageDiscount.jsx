@@ -24,7 +24,8 @@ export default function ManageDiscount({ settings }) {
   const [discountPercentage, setDiscountPercentage] = useState(
     settings.discountPercentage || 15
   );
-  const [noExpiry, setNoExpiry] = useState(false);
+  // Set noExpiry to true by default - discounts will never expire by default
+  const [noExpiry, setNoExpiry] = useState(true);
   const [oncePerCustomer, setOncePerCustomer] = useState(true);
 
   const handleGenerateDiscount = async () => {
@@ -36,12 +37,12 @@ export default function ManageDiscount({ settings }) {
       const formData = new FormData();
       formData.append("action", "generate_discount");
 
-      // Send all discount configuration options
+      // Always set noExpiry to true regardless of state to ensure codes don't expire
       formData.append("percentage", discountPercentage.toString());
-      formData.append("noExpiry", noExpiry.toString());
+      formData.append("noExpiry", "true");
       formData.append("oncePerCustomer", oncePerCustomer.toString());
 
-      console.log(`Submitting with: percentage=${discountPercentage}, noExpiry=${noExpiry}, oncePerCustomer=${oncePerCustomer}`);
+      console.log(`Submitting with: percentage=${discountPercentage}, noExpiry=true, oncePerCustomer=${oncePerCustomer}`);
 
       // Submit the form to the action
       await submit(formData, { method: "post" });
@@ -108,15 +109,9 @@ export default function ManageDiscount({ settings }) {
                     <Text variant="bodyMd" as="span">
                       {settings.discountPercentage}% off
                     </Text>
-                    {settings.noExpiry ? (
-                      <Text variant="bodyMd" as="span">
-                        Never expires
-                      </Text>
-                    ) : (
-                      <Text variant="bodyMd" as="span">
-                        Time remaining: {getDiscountTimeRemaining()}
-                      </Text>
-                    )}
+                    <Text variant="bodyMd" as="span">
+                      Never expires
+                    </Text>
                   </InlineStack>
                   <Text variant="bodyMd" as="p">
                     This discount code is automatically applied to all products.
@@ -169,12 +164,6 @@ export default function ManageDiscount({ settings }) {
                 />
 
                 <Checkbox
-                  label="No expiration date (discount never expires)"
-                  checked={noExpiry}
-                  onChange={setNoExpiry}
-                />
-
-                <Checkbox
                   label="Limit to one use per customer"
                   checked={oncePerCustomer}
                   onChange={setOncePerCustomer}
@@ -215,11 +204,7 @@ export default function ManageDiscount({ settings }) {
                     The discount is automatically applied to all products
                   </li>
                   <li style={{ margin: "8px 0" }}>
-                    {noExpiry ? (
-                      "The discount has no expiration date"
-                    ) : (
-                      "The discount expires after 15 minutes"
-                    )}
+                    The discount has no expiration date and will remain active until you replace it
                   </li>
                   <li style={{ margin: "8px 0" }}>
                     {oncePerCustomer ? (
