@@ -191,7 +191,7 @@ export default function ManageDiscountForm({ settings, hideHowItWorks = false })
         </Box>
       </Card>
 
-      <Box paddingBlockStart="4" style={{  paddingTop:"10px",  }}>
+      <Box paddingBlockStart="4" style={{  paddingTop:"8px",  }}>
         <Card>
           <Box padding="4">
             <Text as="h2" variant="headingMd">
