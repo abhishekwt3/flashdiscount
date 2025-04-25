@@ -55,6 +55,8 @@ export const loader = async ({ request }) => {
   });
 };
 
+// Fix for the action handler to properly update metadata when creating a discount
+// Improved action handler with correct discount type selection
 export const action = async ({ request }) => {
   const { admin, session } = await authenticate.admin(request);
   const shopId = session.shop;
@@ -64,31 +66,31 @@ export const action = async ({ request }) => {
   try {
     // Get form data
     const formData = await request.formData();
-    
+
     // Check what type of action we're handling
     const actionType = formData.get("action");
-    
+
     // Handle discount generation
     if (actionType === "generate_discount") {
       // Parse discount options
       const percentage = formData.get("percentage") ? parseInt(formData.get("percentage"), 10) : 15;
       const noExpiry = formData.get("noExpiry") === "true";
       const oncePerCustomer = formData.get("oncePerCustomer") === "true";
-      
+
       // Get the total usage limit (if provided)
       const totalUsageLimitValue = formData.get("totalUsageLimit");
       const totalUsageLimit = totalUsageLimitValue ? parseInt(totalUsageLimitValue, 10) : null;
-      
+
       // Get expiry settings if applicable
       let expiryDate = null;
       if (!noExpiry) {
         const expiryDuration = parseInt(formData.get("expiryDuration") || "24", 10);
         const expiryUnit = formData.get("expiryUnit") || "hours";
-        
+
         // Calculate expiry date
         const now = new Date();
         expiryDate = new Date(now);
-        
+
         if (expiryUnit === "minutes") {
           expiryDate.setMinutes(expiryDate.getMinutes() + expiryDuration);
         } else if (expiryUnit === "hours") {
@@ -106,81 +108,309 @@ export const action = async ({ request }) => {
         expiryDate: expiryDate ? expiryDate.toISOString() : "never"
       });
 
-      // Your existing discount generation code...
-      // [Rest of discount generation logic]
+      try {
+        // Generate a random discount code
+        function generateDiscountCode() {
+          const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+          let code = "";
+          for (let i = 0; i < 8; i++) {
+            code += chars.charAt(Math.floor(Math.random() * chars.length));
+          }
+          return code;
+        }
 
-      // Always return a response
-      return json({
-        status: "success",
-        discountCode: "CODE", // Replace with actual code from your logic
-        message: "Discount code generated successfully"
-      });
-    } 
+        // Generate a display code for UI
+        const displayCode = generateDiscountCode();
+        console.log("Generated display code:", displayCode);
+
+        // Calculate expiry time - use the one from form settings if provided
+        // or default to 15 minutes if not
+        const now = new Date();
+        const expiresAt = expiryDate || new Date(now.getTime() + 15 * 60000);
+
+        // Convert percentage to decimal (e.g., 10% becomes 0.1)
+        const decimalPercentage = parseFloat(percentage) / 100;
+
+        // Decide which type of discount to create based on options
+        let discountResponse;
+        let discountId;
+        let isAutomatic;
+
+        if (oncePerCustomer) {
+          // For "once per customer" we need to create a CODE discount
+          console.log("Creating code discount (once per customer)");
+
+          const CODE_DISCOUNT_MUTATION = `
+            mutation discountCodeBasicCreate($basicCodeDiscount: DiscountCodeBasicInput!) {
+              discountCodeBasicCreate(basicCodeDiscount: $basicCodeDiscount) {
+                codeDiscountNode {
+                  id
+                  codeDiscount {
+                    ... on DiscountCodeBasic {
+                      title
+                      codes(first: 1) {
+                        edges {
+                          node {
+                            code
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                userErrors {
+                  field
+                  message
+                }
+              }
+            }
+          `;
+
+          const codeVariables = {
+            basicCodeDiscount: {
+              title: `Flash Sale - ${percentage}% Off (${now.getTime()})`,
+              code: displayCode,
+              startsAt: now.toISOString(),
+              ...(noExpiry ? {} : { endsAt: expiresAt.toISOString() }),
+              customerSelection: {
+                all: true
+              },
+              customerGets: {
+                value: {
+                  percentage: decimalPercentage
+                },
+                items: {
+                  all: true
+                }
+              },
+              appliesOncePerCustomer: true,
+              ...(totalUsageLimit ? { usageLimit: totalUsageLimit } : {}),
+              combinesWith: {
+                productDiscounts: false,
+                shippingDiscounts: true,
+                orderDiscounts: false
+              }
+            }
+          };
+
+          console.log("Creating code discount with variables:", JSON.stringify(codeVariables));
+
+          const codeResponse = await admin.graphql(CODE_DISCOUNT_MUTATION, {
+            variables: codeVariables,
+          });
+
+          discountResponse = await codeResponse.json();
+          console.log("Code discount creation response:", JSON.stringify(discountResponse));
+
+          if (discountResponse.errors) {
+            throw new Error(`GraphQL errors: ${JSON.stringify(discountResponse.errors)}`);
+          }
+
+          const { userErrors } = discountResponse.data.discountCodeBasicCreate;
+          if (userErrors && userErrors.length > 0) {
+            throw new Error(`User errors: ${JSON.stringify(userErrors)}`);
+          }
+
+          discountId = discountResponse.data.discountCodeBasicCreate.codeDiscountNode.id;
+          isAutomatic = false;
+
+        } else {
+          // For regular discounts, create an AUTOMATIC discount
+          console.log("Creating automatic discount");
+
+          const AUTOMATIC_DISCOUNT_MUTATION = `
+            mutation discountAutomaticBasicCreate($automaticBasicDiscount: DiscountAutomaticBasicInput!) {
+              discountAutomaticBasicCreate(automaticBasicDiscount: $automaticBasicDiscount) {
+                automaticDiscountNode {
+                  id
+                  automaticDiscount {
+                    ... on DiscountAutomaticBasic {
+                      title
+                      startsAt
+                      endsAt
+                    }
+                  }
+                }
+                userErrors {
+                  field
+                  message
+                }
+              }
+            }
+          `;
+
+          const automaticVariables = {
+            automaticBasicDiscount: {
+              title: `Flash Sale - ${percentage}% Off (${now.getTime()})`,
+              startsAt: now.toISOString(),
+              ...(noExpiry ? {} : { endsAt: expiresAt.toISOString() }),
+              minimumRequirement: {
+                subtotal: {
+                  greaterThanOrEqualToSubtotal: "0.01"
+                }
+              },
+              customerGets: {
+                value: {
+                  percentage: decimalPercentage
+                },
+                items: {
+                  all: true
+                }
+              },
+              ...(totalUsageLimit ? { usageLimit: totalUsageLimit } : {}),
+              combinesWith: {
+                productDiscounts: false,
+                shippingDiscounts: true,
+                orderDiscounts: false
+              }
+            }
+          };
+
+          console.log("Creating automatic discount with variables:", JSON.stringify(automaticVariables));
+
+          const automaticResponse = await admin.graphql(AUTOMATIC_DISCOUNT_MUTATION, {
+            variables: automaticVariables,
+          });
+
+          discountResponse = await automaticResponse.json();
+          console.log("Automatic discount creation response:", JSON.stringify(discountResponse));
+
+          if (discountResponse.errors) {
+            throw new Error(`GraphQL errors: ${JSON.stringify(discountResponse.errors)}`);
+          }
+
+          const { userErrors } = discountResponse.data.discountAutomaticBasicCreate;
+          if (userErrors && userErrors.length > 0) {
+            throw new Error(`User errors: ${JSON.stringify(userErrors)}`);
+          }
+
+          discountId = discountResponse.data.discountAutomaticBasicCreate.automaticDiscountNode.id;
+          isAutomatic = true;
+        }
+
+        // Save to database
+        try {
+          await prisma.discountCode.create({
+            data: {
+              shopId,
+              code: displayCode,
+              discountPercentage: percentage,
+              isAutomatic: isAutomatic,
+              discountId,
+              expiresAt: noExpiry ? null : expiresAt
+            }
+          });
+          console.log("Discount saved to database");
+        } catch (dbError) {
+          console.error("Error saving discount to database:", dbError);
+          // Continue even if DB save fails
+        }
+
+        // Fetch current settings from metafields
+        console.log("Fetching current settings from metafields");
+        const currentSettings = await getSettings(admin);
+        console.log("Current settings:", currentSettings);
+
+        // Update the settings with the new discount code
+        const updatedSettings = {
+          ...currentSettings,
+          currentDiscountCode: displayCode,
+          discountPercentage: percentage,
+          discountCreatedAt: new Date().toISOString(),
+          discountExpiresAt: noExpiry ? null : expiresAt.toISOString(),
+          noExpiry: noExpiry,
+          oncePerCustomer: oncePerCustomer,
+          totalUsageLimit: totalUsageLimit || null,
+          isAutomatic: isAutomatic,
+          discountId: discountId
+        };
+
+        console.log("Updated settings to save:", updatedSettings);
+
+        // Save the updated settings to metafields
+        try {
+          await saveSettings(admin, updatedSettings);
+          console.log("Settings successfully saved to metafields");
+        } catch (saveError) {
+          console.error("Error saving settings to metafields:", saveError);
+          throw new Error(`Failed to save settings: ${saveError.message}`);
+        }
+
+        // Return success response
+        return json({
+          status: "success",
+          discountCode: displayCode,
+          message: "Discount code generated successfully"
+        });
+      } catch (discountError) {
+        console.error("Error creating discount:", discountError);
+        return json({
+          status: "error",
+          message: `Error generating discount: ${discountError.message}`
+        }, { status: 500 });
+      }
+    }
     // Handle settings save from any tab
     else if (formData.has("settings")) {
       const settingsJson = formData.get("settings");
-      
-      // Log what type of settings we're saving based on form data
-      // This helps with debugging which tab's settings are being saved
-      console.log("Saving settings. Form data keys:", [...formData.keys()]);
-      
+
       if (settingsJson) {
         try {
           const settings = JSON.parse(settingsJson);
           console.log("Action: Parsed settings:", settings);
-          
+
           // Save settings to database or metafields
           await saveSettings(admin, settings);
-          
+
           // Always return a success response
-          return json({ 
-            status: "success", 
+          return json({
+            status: "success",
             message: "Settings saved successfully",
             // Include the tab if it was provided in the form data
             tab: formData.get("tab") || null
           });
         } catch (parseError) {
           console.error("Error parsing settings JSON:", parseError);
-          return json({ 
-            status: "error", 
-            message: "Invalid settings format: " + parseError.message 
+          return json({
+            status: "error",
+            message: "Invalid settings format: " + parseError.message
           }, { status: 400 });
         }
       } else {
         console.error("Settings form data is empty");
-        return json({ 
-          status: "error", 
-          message: "No settings provided" 
+        return json({
+          status: "error",
+          message: "No settings provided"
         }, { status: 400 });
       }
     }
-    // Handle toggle actions (like enabling/disabling features)
+    // Handle other actions
     else if (actionType === "toggle_active") {
       const isActive = formData.get("isActive") === "true";
       console.log(`Toggling active status to ${isActive}`);
-      
+
       // Your code to toggle the active status
       // await toggleActive(shopId, isActive);
-      
-      return json({ 
-        status: "success", 
-        message: `Discount bar ${isActive ? 'enabled' : 'disabled'} successfully` 
+
+      return json({
+        status: "success",
+        message: `Discount bar ${isActive ? 'enabled' : 'disabled'} successfully`
       });
     }
     // Fallback for any other form submissions
     else {
       console.warn("Unrecognized action in form submission:", [...formData.entries()]);
-      return json({ 
-        status: "error", 
-        message: "Unrecognized action" 
+      return json({
+        status: "error",
+        message: "Unrecognized action"
       }, { status: 400 });
     }
   } catch (error) {
     // Global error handler
     console.error("Error in action:", error);
-    return json({ 
-      status: "error", 
-      message: error.message || "An unknown error occurred" 
+    return json({
+      status: "error",
+      message: error.message || "An unknown error occurred"
     }, { status: 500 });
   }
 };
@@ -295,7 +525,7 @@ export default function Index() {
                                 />
                               </div>
                             </div>
-                            
+
                             {/* Two-column layout for emoji picker and timer settings */}
                             <div style={{ display: "flex", gap: "16px" }}>
                               <div style={{ flex: 1 }}>
@@ -315,7 +545,7 @@ export default function Index() {
                         </Box>
                       </Box>
                     </Card>
-                    
+
                     {/* Discount Message Card */}
                     <Box paddingBlockStart="4" style={{  paddingTop:"8px",  }}>
                       <Card>
@@ -349,7 +579,7 @@ export default function Index() {
                         </Box>
                       </Card>
                     </Box>
-                    
+
                     {/* Display Conditions Card */}
                     <Box paddingBlockStart="4" style={{  paddingTop:"8px",  }}>
                       <Card>
@@ -368,17 +598,17 @@ export default function Index() {
                                 max={300}
                                 step={10}
                               />
-                              
+
                               <Text variant="bodyMd" as="p">
                                 The discount popup will appear after this many seconds of browsing, if the cart has items.
                               </Text>
-                              
+
                               <Checkbox
                                 label="Only show popup when cart has items"
                                 checked={settings.requireCartItems !== false}
                                 onChange={(checked) => handleChange("requireCartItems", checked)}
                               />
-                              
+
                               <Checkbox
                                 label="Enable discount popup"
                                 checked={settings.isActive !== false}
@@ -389,7 +619,7 @@ export default function Index() {
                         </Box>
                       </Card>
                     </Box>
-                    
+
                     {/* Save Button with green color and proper padding */}
                     <Box paddingBlockStart="6" style={{  paddingTop:"8px",  }}>
                       <Button
@@ -412,7 +642,7 @@ export default function Index() {
                     </Box>
                     </Card>
                   </Layout.Section>
-                  
+
                   {/* Preview column (right side) */}
                   <Layout.Section variant="oneHalf">
                     <Card>
@@ -428,7 +658,7 @@ export default function Index() {
                         </Text>
                       </Box>
                     </Card>
-                    
+
                     {/* Moved Popup Discount description below preview with added padding */}
                     <Box paddingBlockStart="4" style={{  paddingTop:"10px",  }}>
                       <Banner
@@ -457,7 +687,7 @@ export default function Index() {
                       </Box>
                     </Card>
                   </Layout.Section>
-                  
+
                   {/* How It Works column (right side) */}
                   <Layout.Section variant="oneHalf">
                     <Card>
@@ -494,7 +724,7 @@ export default function Index() {
                         </Box>
                       </Box>
                     </Card>
-                    
+
                     <Box paddingBlockStart="6" style={{ paddingTop: "8px"}}>
                       <Banner title="Tips for Effective Discounts" status="info">
                         <ul style={{ paddingLeft: "20px", margin: "10px 0" }}>

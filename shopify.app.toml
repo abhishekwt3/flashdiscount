@@ -3,7 +3,7 @@
 client_id = "0fc6ba34a6e6ea3e0df48a758dfa5437"
 name = "flashOff"
 handle = "flashoff"
-application_url = "https://docs-science-exploring-fallen.trycloudflare.com"
+application_url = "https://advertising-contained-shield-exactly.trycloudflare.com"
 embedded = true
 
 [build]
@@ -28,9 +28,9 @@ scopes = "write_products, write_discounts, write_metaobjects"
 
 [auth]
 redirect_urls = [
-  "https://docs-science-exploring-fallen.trycloudflare.com/auth/callback",
-  "https://docs-science-exploring-fallen.trycloudflare.com/auth/shopify/callback",
-  "https://docs-science-exploring-fallen.trycloudflare.com/api/auth/callback"
+  "https://advertising-contained-shield-exactly.trycloudflare.com/auth/callback",
+  "https://advertising-contained-shield-exactly.trycloudflare.com/auth/shopify/callback",
+  "https://advertising-contained-shield-exactly.trycloudflare.com/api/auth/callback"
 ]
 
 [pos]
