@@ -3,7 +3,7 @@
 client_id = "0fc6ba34a6e6ea3e0df48a758dfa5437"
 name = "flashOff"
 handle = "flashoff"
-application_url = "https://advertising-contained-shield-exactly.trycloudflare.com"
+application_url = "https://hindu-portal-yourself-dvds.trycloudflare.com"
 embedded = true
 
 [build]
@@ -28,9 +28,9 @@ scopes = "write_products, write_discounts, write_metaobjects"
 
 [auth]
 redirect_urls = [
-  "https://advertising-contained-shield-exactly.trycloudflare.com/auth/callback",
-  "https://advertising-contained-shield-exactly.trycloudflare.com/auth/shopify/callback",
-  "https://advertising-contained-shield-exactly.trycloudflare.com/api/auth/callback"
+  "https://hindu-portal-yourself-dvds.trycloudflare.com/auth/callback",
+  "https://hindu-portal-yourself-dvds.trycloudflare.com/auth/shopify/callback",
+  "https://hindu-portal-yourself-dvds.trycloudflare.com/api/auth/callback"
 ]
 
 [pos]
