@@ -2,7 +2,7 @@
   "name": "flash-off",
   "private": true,
   "scripts": {
-    "build": "remix vite:build",
+    "build": "npx prisma generate && remix vite:build",
     "dev": "shopify app dev",
     "config:link": "shopify app config link",
     "generate": "shopify app generate",
@@ -16,8 +16,7 @@
     "shopify": "shopify",
     "prisma": "prisma",
     "graphql-codegen": "graphql-codegen",
-    "vite": "vite",
-    "postinstall": "prisma generate"
+    "vite": "vite"
   },
   "type": "module",
   "engines": {
