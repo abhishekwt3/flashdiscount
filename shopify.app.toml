@@ -3,7 +3,7 @@
 client_id = "0fc6ba34a6e6ea3e0df48a758dfa5437"
 name = "flashOff"
 handle = "flashoff"
-application_url = "https://flashdiscount.fly.dev"
+application_url = "https://flashdiscount.vercel.app"
 embedded = true
 
 [build]
@@ -28,9 +28,9 @@ scopes = "write_products, write_discounts, write_metaobjects"
 
 [auth]
 redirect_urls = [
-  "https://flashdiscount.fly.dev/auth/callback",
-  "https://flashdiscount.fly.dev/auth/shopify/callback",
-  "https://flashdiscount.fly.dev/api/auth/callback"
+  "https://flashdiscount.vercel.app/auth/callback",
+  "https://flashdiscount.vercel.app/auth/shopify/callback",
+  "https://flashdiscount.vercel.app/api/auth/callback"
 ]
 
 [pos]
