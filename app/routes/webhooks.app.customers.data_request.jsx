@@ -1,12 +1,16 @@
+// Use separate imports for server-only modules
 import { authenticate } from "../shopify.server";
-import db from "../db.server";
 
-/**
- * Handles GDPR customer data requests.
- * The shop has received a data request from a customer. Respond with any customer data stored by the app.
- * https://shopify.dev/docs/apps/webhooks/configuration/mandatory-webhooks
- */
+// Only import server-only modules inside the action function
 export const action = async ({ request }) => {
+  // Import db.server inside the action function to avoid client-side import
+  const db = await import("../db.server").then(module => module.default);
+
+  /**
+   * Handles GDPR customer data requests.
+   * The shop has received a data request from a customer. Respond with any customer data stored by the app.
+   * https://shopify.dev/docs/apps/webhooks/configuration/mandatory-webhooks
+   */
   const { topic, shop, session, payload } = await authenticate.webhook(request);
 
   console.log(`Received ${topic} webhook from ${shop}`);
