@@ -425,6 +425,17 @@ export default function Index() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mainTab, setMainTab] = useState(0);
 
+  const openThemeEditor = () => {
+    // This is the app block ID for your extension
+    const appBlockId = "flashoff/discount-bar";
+
+    // Create the deep link URL to the theme editor
+    const themeEditorUrl = `https://${shop}/admin/themes/current/editor?template=product&addAppBlockId=${encodeURIComponent(appBlockId)}&target=sectionGroup:header`;
+
+    // Open in a new tab using regular window.open()
+    window.open(themeEditorUrl, '_blank');
+  };
+
   // Update local state when saved settings change
   useEffect(() => {
     setSettings(savedSettings);
@@ -666,6 +677,11 @@ export default function Index() {
                         status="success"
                       >
                         <p>This discount popup appears when customers have items in their cart and have been browsing for a set amount of time. It creates urgency to complete the purchase.</p>
+                        <div style={{ marginTop: "10px" }}>
+                        <Button onClick={openThemeEditor} size="medium">
+                          Install to Theme Header
+                        </Button>
+                        </div>
                       </Banner>
                     </Box>
                   </Layout.Section>
