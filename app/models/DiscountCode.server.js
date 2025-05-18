@@ -27,7 +27,7 @@ export async function createAutomaticDiscount(admin, { percentage, durationMinut
     console.log(`Discount period: ${now.toISOString()} to ${expiresAt.toISOString()}`);
 
     // Prepare title with timestamp to avoid duplicate title errors
-    const title = `Limited Time Offer - ${percentage}% Off Everything (${now.getTime()})`;
+    const title = `Flash Sale - ${percentage}% Off (${now.getTime()})`;
 
     // Convert percentage to decimal (e.g., 10% becomes 0.1)
     const decimalPercentage = parseFloat(percentage) / 100;
@@ -142,4 +142,226 @@ export async function createAutomaticDiscount(admin, { percentage, durationMinut
     console.error("Error stack:", error.stack);
     throw new Error(`Failed to create automatic discount: ${error.message || "Unknown error"}`);
   }
+}
+
+/**
+ * Query Shopify for active discount codes matching our titles
+ */
+export async function checkActiveDiscounts(admin) {
+  try {
+    console.log("Checking active discount status from Shopify");
+
+    // Query to get the latest discount codes with "Flash Sale" in the title
+    const DISCOUNT_STATUS_QUERY = `
+      query GetAllDiscountCodesWithStatus {
+        codeDiscountNodes(first: 10, reverse: true, query: "title:Flash Sale") {
+          nodes {
+            id
+            codeDiscount {
+              ... on DiscountCodeBasic {
+                title
+                status
+                codes(first: 1) {
+                  edges {
+                    node {
+                      code
+                    }
+                  }
+                }
+                endsAt
+                startsAt
+                summary
+              }
+            }
+          }
+        }
+        automaticDiscountNodes(first: 10, reverse: true, query: "title:Flash Sale") {
+          nodes {
+            id
+            automaticDiscount {
+              ... on DiscountAutomaticBasic {
+                title
+                status
+                endsAt
+                startsAt
+                summary
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const response = await admin.graphql(DISCOUNT_STATUS_QUERY);
+    const responseJson = await response.json();
+
+    if (responseJson.errors) {
+      console.error("GraphQL errors:", responseJson.errors);
+      throw new Error(`Error fetching discount status: ${responseJson.errors[0].message}`);
+    }
+
+    // Process code-based discounts
+    const codeDiscounts = responseJson.data.codeDiscountNodes.nodes;
+    // Process automatic discounts
+    const automaticDiscounts = responseJson.data.automaticDiscountNodes.nodes;
+
+    // Combine all discounts and sort by creation date (newest first)
+    const allDiscounts = [
+      ...codeDiscounts.map(node => ({
+        id: node.id,
+        title: node.codeDiscount.title,
+        status: node.codeDiscount.status,
+        isAutomatic: false,
+        code: node.codeDiscount.codes?.edges[0]?.node?.code || null,
+        endsAt: node.codeDiscount.endsAt,
+        startsAt: node.codeDiscount.startsAt,
+        summary: node.codeDiscount.summary
+      })),
+      ...automaticDiscounts.map(node => ({
+        id: node.id,
+        title: node.automaticDiscount.title,
+        status: node.automaticDiscount.status,
+        isAutomatic: true,
+        code: null, // Automatic discounts don't have codes
+        endsAt: node.automaticDiscount.endsAt,
+        startsAt: node.automaticDiscount.startsAt,
+        summary: node.automaticDiscount.summary
+      }))
+    ];
+
+    // Sort by creation time (assuming newer discounts have larger timestamps in title)
+    allDiscounts.sort((a, b) => {
+      // Extract timestamps from titles if they exist (assuming format "Flash Sale - X% Off (timestamp)")
+      const timestampA = extractTimestampFromTitle(a.title);
+      const timestampB = extractTimestampFromTitle(b.title);
+
+      if (timestampA && timestampB) {
+        return timestampB - timestampA; // Newest first
+      }
+
+      // Fallback to comparing titles
+      return a.title.localeCompare(b.title);
+    });
+
+    console.log("All discounts:", allDiscounts);
+
+    // Find the most recent active discount
+    const activeDiscount = allDiscounts.find(discount => discount.status === "ACTIVE");
+
+    if (activeDiscount) {
+      console.log("Found active discount:", activeDiscount);
+
+      // Extract discount percentage from title
+      const percentageMatch = activeDiscount.title.match(/(\d+)%/);
+      const percentage = percentageMatch ? parseInt(percentageMatch[1], 10) : null;
+
+      // Parse the timestamp and expiry
+      let noExpiry = false;
+      if (!activeDiscount.endsAt) {
+        noExpiry = true;
+      }
+
+      // For automatic discounts, we need to use the display code from our settings
+      // or generate a random code just for display
+      const code = activeDiscount.code ||
+                 extractCodeFromTitle(activeDiscount.title) ||
+                 generateDiscountCode();
+
+      return {
+        hasActiveDiscount: true,
+        discountId: activeDiscount.id,
+        discountCode: code,
+        discountPercentage: percentage,
+        isAutomatic: activeDiscount.isAutomatic,
+        discountExpiresAt: activeDiscount.endsAt,
+        discountStartsAt: activeDiscount.startsAt,
+        noExpiry: noExpiry,
+        status: activeDiscount.status
+      };
+    } else {
+      console.log("No active discounts found");
+      return {
+        hasActiveDiscount: false
+      };
+    }
+  } catch (error) {
+    console.error("Error checking discount status:", error);
+    throw error;
+  }
+}
+
+/**
+ * Get all active discounts from Shopify
+ * This is used for testing/debugging
+ */
+export async function getActiveDiscounts(session) {
+  try {
+    if (!session || !session.admin) {
+      throw new Error("Invalid session or missing admin API access");
+    }
+
+    const { admin } = session;
+
+    // Similar query to checkActiveDiscounts, but returns raw data
+    const ACTIVE_DISCOUNTS_QUERY = `
+      query {
+        codeDiscountNodes(first: 10, query: "status:active") {
+          nodes {
+            id
+            codeDiscount {
+              ... on DiscountCodeBasic {
+                title
+                status
+                codes(first: 1) {
+                  edges {
+                    node {
+                      code
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        automaticDiscountNodes(first: 10, query: "status:active") {
+          nodes {
+            id
+            automaticDiscount {
+              ... on DiscountAutomaticBasic {
+                title
+                status
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const response = await admin.graphql(ACTIVE_DISCOUNTS_QUERY);
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching active discounts:", error);
+    throw error;
+  }
+}
+
+// Helper function to extract timestamp from discount title
+function extractTimestampFromTitle(title) {
+  const match = title.match(/\((\d+)\)/);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+// Helper function to extract code from title if needed
+function extractCodeFromTitle(title) {
+  // This is a fallback method that assumes the code might be in the title
+  // In practice, we should store the code properly in our database
+  // This is just a helper in case we need to extract it from the title
+  const words = title.split(' ');
+  for (const word of words) {
+    // Look for all-caps code-like strings (imperfect heuristic)
+    if (word.length >= 5 && word === word.toUpperCase() && /^[A-Z0-9]+$/.test(word)) {
+      return word;
+    }
+  }
+  return null;
 }

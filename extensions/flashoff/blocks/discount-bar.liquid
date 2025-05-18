@@ -51,7 +51,7 @@
       <span class="discount-bar-timer"></span>
       <span class="discount-bar-close">&times;</span>
     </div>
-    
+
     <!-- Main discount bar container -->
     <div class="discount-bar-container">
       <!-- Main content area -->
@@ -61,7 +61,7 @@
           <span class="discount-bar-text"></span>
         </div>
       </div>
-      
+
       <!-- Apply button at bottom -->
       <div class="discount-bar-apply">
         <span class="apply-button">APPLY OFFER</span>
@@ -71,7 +71,7 @@
 </div>
 
 <style>
-  /* Reset styles to prevent theme interference */
+  /* ---------- RESET & BASE STYLES ---------- */
   #discount-bar-app * {
     box-sizing: border-box;
     margin: 0;
@@ -79,27 +79,93 @@
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   }
 
+  /* ---------- CORE POSITIONING & VISIBILITY ---------- */
   #discount-bar-app {
-    position: fixed;
-    bottom: 20px;
-    left: 0;
-    right: 0;
-    width: 100%;
-    display: none; /* Initially hide, JS will show */
-    justify-content: center;
-    align-items: center;
-    z-index: 9999;
-    opacity: 1;
-    transform: translateY(0);
-    transition: opacity 0.3s ease, transform 0.3s ease;
+    /* Base positioning */
+    position: fixed !important;
+    bottom: 20px !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: auto !important; /* Prevent top positioning */
+    width: 100% !important;
+
+    /* Layering - maximum possible z-index */
+    z-index: 2147483647 !important;
+
+    /* Initially hidden - will be shown by JS */
+    display: none !important;
+    opacity: 0;
+
+    /* Break out of parent containers */
+    margin: 0 !important;
+    padding: 0 !important;
+
+    /* Reset parent container constraints */
+    max-width: none !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    height: auto !important;
+
+    /* Overflow behavior */
+    overflow: visible !important;
+
+    /* Animation & transformation */
+    transform: translateY(20px) !important; /* Start position for animation */
+    transition: opacity 0.3s ease, transform 0.3s ease !important;
+
+    /* Click handling */
+    pointer-events: none; /* Make container transparent to clicks by default */
   }
 
+  /* Override when the popup is shown via JS */
+  #discount-bar-app[style*="display: flex"] {
+    display: flex !important;
+    pointer-events: auto !important;
+  }
+
+  /* ---------- SPECIFIC PARENT OVERRIDES ---------- */
+  /* Fix for any header or sticky parent containers */
+  .header #discount-bar-app,
+  header #discount-bar-app,
+  [class*="header"] #discount-bar-app,
+  [class*="Header"] #discount-bar-app,
+  .sticky-header #discount-bar-app,
+  .site-header #discount-bar-app,
+  .navigation #discount-bar-app,
+  .nav-wrapper #discount-bar-app,
+  .nav-container #discount-bar-app,
+  main #discount-bar-app,
+  #main #discount-bar-app,
+  .main-content #discount-bar-app,
+  section #discount-bar-app,
+  footer #discount-bar-app {
+    position: fixed !important;
+    bottom: 20px !important;
+    top: auto !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 2147483647 !important;
+  }
+
+  /* Extra overrides for template pages */
+  body:not(.template-index) #discount-bar-app,
+  html body #discount-bar-app {
+    position: fixed !important;
+    bottom: 20px !important;
+    top: auto !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 2147483647 !important;
+  }
+
+  /* ---------- WRAPPER & CONTENT STYLES ---------- */
   .discount-wrapper {
-    position: relative;
-    width: 400px;
-    height: 110px; /* Increased height to accommodate button */
-    padding: 5px; /* Added 5px padding to the wrapper */
-    overflow: visible; /* Ensure content that overflows is visible */
+    position: relative !important;
+    width: 400px !important;
+    height: 110px !important;
+    margin: 0 auto !important;
+    overflow: visible !important;
+    pointer-events: auto !important; /* Allow clicks on the wrapper */
   }
 
   /* Timer bar - small, positioned in top right */
@@ -115,16 +181,16 @@
     align-items: center;
     min-width: 170px;
     height: 22px;
-    z-index: 10000;
+    z-index: 2147483646; /* One less than parent */
     font-weight: bold;
     font-size: 12px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     border: 1px solid #EEEEEE;
-    justify-content: space-between; /* This will push items apart */
+    justify-content: space-between;
   }
 
   .timer-label {
-    margin-right: 2px; /* Reduced from 5px to minimize gap */
+    margin-right: 2px;
   }
 
   .discount-bar-timer {
@@ -149,12 +215,13 @@
     background-color: #FF5733;
     color: #FFFFFF;
     border-radius: 10px;
-    overflow: visible; /* Changed from hidden to allow button to show outside */
+    overflow: visible;
     display: flex;
     flex-direction: column;
     box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     border: 1px solid #DDDDDD;
-    padding-bottom: 12px; /* Add padding at bottom for button space */
+    padding-bottom: 12px;
+    z-index: 2147483645; /* Two less than parent */
   }
 
   /* Main content with emoji and text */
@@ -172,14 +239,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-right: 10px; 
+    margin-right: 10px;
     flex-shrink: 0;
-    border-right: 5px solid transparent; /* Add invisible border for spacing */
+    border-right: 5px solid transparent;
   }
 
   .discount-bar-message {
     flex: 1;
-    padding-left: 5px; /* Add padding to create space from emoji */
+    padding-left: 5px;
   }
 
   .discount-bar-text {
@@ -201,7 +268,7 @@
     bottom: -13px;
     left: 0;
     right: 0;
-    z-index: 10001; /* Ensure it appears above the main container */
+    z-index: 2147483646; /* Same as timer bar */
   }
 
   .apply-button {
@@ -225,15 +292,32 @@
     text-align: center;
   }
 
-  /* Mobile optimization */
+  /* ---------- MOBILE OPTIMIZATION ---------- */
   @media (max-width: 480px) {
     .discount-wrapper {
-      width: 95%;
+      width: 95% !important;
     }
-    
+
     .timer-bar {
       right: 0;
     }
+  }
+
+  /* ---------- THEME EDITOR SPECIFIC STYLES ---------- */
+  .shopify-section-editor #discount-bar-app,
+  .shopify-editor #discount-bar-app,
+  .theme-editor #discount-bar-app,
+  [class*="editor"] #discount-bar-app {
+    position: relative !important;
+    display: flex !important;
+    opacity: 1 !important;
+    transform: none !important;
+    height: 120px !important;
+    background: rgba(245, 245, 245, 0.5) !important;
+    border: 1px dashed #ccc !important;
+    margin: 10px 0 !important;
+    overflow: hidden !important;
+    pointer-events: auto !important;
   }
 </style>
 

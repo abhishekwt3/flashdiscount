@@ -23,7 +23,7 @@ api_version = "2025-04"
   uri = "/webhooks/app/scopes_update"
 
   [[webhooks.subscriptions]]
-  topics = []
+  topics = [ ]
   compliance_topics = [ "customers/redact", "customers/data_request", "shop/redact" ]
   uri = "/webhooks/app"
 
